@@ -6,3 +6,8 @@ CSC410 Software Verification and Testing (FALL 2017)
 - Xiao Ming Zhu (zhuxia19) 
 - Yuzhong Liang (liangyuz) 
 - Plato Man Hon Leung (leungpla) 
+
+
+
+## Tool Reference
+1. Git submodule management: https://git-scm.com/book/en/v2/Git-Tools-Submodules
