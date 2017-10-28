@@ -68,3 +68,59 @@ class FuncWriteSetPrinter(NodeVisitor):
         for fname, writeset in self.writesets.items():
             # Print 'function string' writes in 'set representation'
             print ("%s writes in %r" % (fname, writeset))
+
+
+class ReadSetVisitor(NodeVisitor):
+    def __init__(self):
+        # The 'memory' of the node: the set of variables we are writing in.
+        self.readset = set()
+
+    # What we do when we visit an assignment.
+    def visit_Assignment(self, assignment):
+        # Add all rvalue if it is an ID node
+        # we don't care about other types of rvalue in this
+        if isinstance(assignment.rvalue, BinaryOp):
+            if isinstance(assignment.rvalue.left, ID):
+                self.readset.add(assignment.rvalue.left.name)
+            if isinstance(assignment.rvalue.right, ID):
+                self.readset.add(assignment.rvalue.right.name)
+
+    # What happens when we visit a arrayref.
+    # Similar to the previous example: we add the variable name
+    def visit_ArrayRef(self, aref):
+        if isinstance(aref.name, ID):
+            self.readset.add(aref.name.name)
+
+    # Here we have a single visitor looking in the whole tree. But you
+    # might sometimes need to handle merge cases (when you have to
+    # look in a specific way into different branches)
+    # For example, we could have added the following function
+    def visit_If(self, ifnode):
+        rif = ReadSetVisitor()
+        relse = ReadSetVisitor()
+        rif.visit(ifnode.iftrue)
+        relse.visit(ifnode.iffalse)
+        self.readset.union(rif.readset.union(relse.readset.union()))
+
+    # In this case it is not really interesting, the visitor would have added
+    # the variables anyway, but it could be in other cases.
+
+
+# We can wrap this in a function visitor
+class FuncReadSetPrinter(NodeVisitor):
+    def __init__(self):
+        # The dict associates function names to write sets:
+        self.readsets = {}
+
+    def visit_FuncDef(self, funcdef):
+        # Create a WriteSet visitor for the body of the function
+        rsv = ReadSetVisitor()
+        # Execute it on the function's body
+        rsv.visit(funcdef.body)
+        # Now it contains the readset of the function
+        self.readsets[funcdef.decl.name] = rsv.readset
+
+    def print_sets(self):
+        for fname, readset in self.readsets.items():
+            # Print 'function string' writes in 'set representation'
+            print ("%s reads in %r" % (fname, readset))
