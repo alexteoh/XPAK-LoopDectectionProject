@@ -2,6 +2,7 @@ from pyminic.minic.minic_ast import *
 
 ##
 ## Copied from Victor Nicolet's tutorial examples.
+## still working on visit_forloop
 ##
 
 class VariablePrinter(NodeVisitor):
@@ -49,6 +50,13 @@ class WriteSetVisitor(NodeVisitor):
     # In this case it is not really interesting, the visitor would have added
     # the variables anyway, but it could be in other cases.
 
+#still working on this function
+def visit_forloop(self,fornode):
+        wfor = WriteSetVisitor()
+        while wfor.cond != null:
+             wnext  = WriteSetVisitor()
+             wnext.vist(fornode.next)
+             self.writeset.union(wfor.writeset.union(wnext.writeset.union)
 
 # We can wrap this in a function visitor
 class FuncWriteSetPrinter(NodeVisitor):
@@ -104,7 +112,14 @@ class ReadSetVisitor(NodeVisitor):
 
     # In this case it is not really interesting, the visitor would have added
     # the variables anyway, but it could be in other cases.
-
+                                 
+#still working on this function
+def visit_forloop(self,fornode):
+        wfor = WriteSetVisitor()
+        while wfor.cond != null:
+             wnext  = WriteSetVisitor()
+             wnext.vist(fornode.next)
+             self.writeset.union(wfor.writeset.union(wnext.writeset.union)
 
 # We can wrap this in a function visitor
 class FuncReadSetPrinter(NodeVisitor):
