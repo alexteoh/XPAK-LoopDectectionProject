@@ -1,9 +1,23 @@
 from minic.minic_ast import *
+from minic.analysis import *
 
-##
-## Copied from Victor Nicolet's tutorial examples.
-## still working on visit_forloop
-##
+
+
+class LoopVisitor():
+
+    def __init__(self):
+        # The 'memory' of the node: the set of variables we are writing in.
+        self.liveVariables = LiveVariables()
+        self.reachingDefinitions = ReachingDefinitions()
+
+    def visit(self, node):
+        self.liveVariables.visit(node)
+        self.reachingDefinitions.visit(node)
+
+    def __str__(self):
+        res = ""
+
+
 
 class VariablePrinter(NodeVisitor):
     # The type of node a function visits depends on its name
@@ -49,14 +63,6 @@ class WriteSetVisitor(NodeVisitor):
 
     # In this case it is not really interesting, the visitor would have added
     # the variables anyway, but it could be in other cases.
-
-#still working on this function
-def visit_forloop(self,fornode):
-        wfor = WriteSetVisitor()
-        while wfor.cond != None:
-             wnext  = WriteSetVisitor()
-             wnext.visit(fornode.next)
-             self.writeset.union(wfor.writeset.union(wnext.writeset.union))
 
 # We can wrap this in a function visitor
 class FuncWriteSetPrinter(NodeVisitor):
@@ -112,14 +118,6 @@ class ReadSetVisitor(NodeVisitor):
 
     # In this case it is not really interesting, the visitor would have added
     # the variables anyway, but it could be in other cases.
-                                 
-#still working on this function
-def visit_forloop(self,fornode):
-        wfor = WriteSetVisitor()
-        while wfor.cond != None:
-             wnext  = WriteSetVisitor()
-             wnext.visit(fornode.next)
-             self.writeset.union(wfor.writeset.union(wnext.writeset.union))
 
 # We can wrap this in a function visitor
 class FuncReadSetPrinter(NodeVisitor):
