@@ -1,10 +1,10 @@
 from pycparser import parse_file
-from pyminic.minic.c_ast_to_minic import transform
+from minic.c_ast_to_minic import transform
 from analyzer_utils import *
 
 import os
 
-test_file = os.path.join("./pyminic/tests/c_files", "minic.c")
+test_file = os.path.join("./prog_inputs", "minic.c")
 
 ast = parse_file(test_file)
 

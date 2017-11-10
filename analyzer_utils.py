@@ -1,4 +1,4 @@
-from pyminic.minic.minic_ast import *
+from minic.minic_ast import *
 
 ##
 ## Copied from Victor Nicolet's tutorial examples.
@@ -53,10 +53,10 @@ class WriteSetVisitor(NodeVisitor):
 #still working on this function
 def visit_forloop(self,fornode):
         wfor = WriteSetVisitor()
-        while wfor.cond != null:
+        while wfor.cond != None:
              wnext  = WriteSetVisitor()
-             wnext.vist(fornode.next)
-             self.writeset.union(wfor.writeset.union(wnext.writeset.union)
+             wnext.visit(fornode.next)
+             self.writeset.union(wfor.writeset.union(wnext.writeset.union))
 
 # We can wrap this in a function visitor
 class FuncWriteSetPrinter(NodeVisitor):
@@ -116,10 +116,10 @@ class ReadSetVisitor(NodeVisitor):
 #still working on this function
 def visit_forloop(self,fornode):
         wfor = WriteSetVisitor()
-        while wfor.cond != null:
+        while wfor.cond != None:
              wnext  = WriteSetVisitor()
-             wnext.vist(fornode.next)
-             self.writeset.union(wfor.writeset.union(wnext.writeset.union)
+             wnext.visit(fornode.next)
+             self.writeset.union(wfor.writeset.union(wnext.writeset.union))
 
 # We can wrap this in a function visitor
 class FuncReadSetPrinter(NodeVisitor):
