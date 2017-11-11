@@ -1,6 +1,6 @@
 from minic.minic_ast import *
 from minic.analysis import *
-
+import copy
 
 
 class LoopVisitor():
@@ -9,22 +9,76 @@ class LoopVisitor():
         # The 'memory' of the node: the set of variables we are writing in.
         self.liveVariables = LiveVariables()
         self.reachingDefinitions = ReachingDefinitions()
+        self.loopRWVisitor = LoopRWVisitor()
         self.loops = list()
 
     def visit(self, node):
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
+        self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
 
     def __str__(self):
         res = "Here're the states of each loop in the given program. \n"
         for sid in self.loops:
             res += "----------In this loop----------\n"
+            res += "Read Variables are these: \n"
+            res += str(self.loopRWVisitor.readsets[sid]) + "\n"
+            res += "Write Variables are these: \n"
+            res += str(self.loopRWVisitor.writesets[sid]) + "\n"
             res += "Live Variables are these: \n"
             res += self.liveVariables.str_of_rdef(sid)
             res += "Reaching Definitions are these\n"
             res += self.reachingDefinitions.str_of_rdef(sid)
         return res
+
+
+class LoopRWVisitor(NodeVisitor):
+
+    def __init__(self):
+        self.readsets = {}
+        self.writesets = {}
+        self.loops = list()
+
+    def visit_For(self, forstmt):
+        forsid = forstmt.nid
+        self.loops.append(forsid)
+        bv = BlockRWVisitor()
+        bv.visit(forstmt.stmt)
+        self.writesets[forsid] = copy.deepcopy(bv.writeset)
+        self.readsets[forsid] = copy.deepcopy(bv.readset)
+
+    def visit_While(self, whilestmt):
+        whilesid = whilestmt.nid
+        self.loops.append(whilesid)
+        bv = BlockRWVisitor()
+        bv.visit(whilestmt.stmt)
+        self.writesets[whilesid] = copy.deepcopy(bv.writeset)
+        self.readsets[whilesid] = copy.deepcopy(bv.readset)
+
+    def visit_DoWhile(self, dowhilestmt):
+        dowhilesid = dowhilestmt.nid
+        self.loops.append(dowhilesid)
+        bv = BlockRWVisitor()
+        bv.visit(dowhilestmt.stmt)
+        self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
+        self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
+
+
+class BlockRWVisitor(NodeVisitor):
+
+    def __init__(self):
+        self.readset = set()
+        self.writeset = set()
+
+    def visit_Block(self, block):
+        wsv = WriteSetVisitor()
+        rsv = ReadSetVisitor()
+        for stmt in block.block_items:
+            wsv.visit(stmt)
+            self.writeset = self.writeset.union(wsv.writeset)
+            rsv.visit(stmt)
+            self.readset = self.readset.union(rsv.readset)
 
 
 class VariablePrinter(NodeVisitor):
