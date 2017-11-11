@@ -9,14 +9,22 @@ class LoopVisitor():
         # The 'memory' of the node: the set of variables we are writing in.
         self.liveVariables = LiveVariables()
         self.reachingDefinitions = ReachingDefinitions()
+        self.loops = list()
 
     def visit(self, node):
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
+        self.loops = [sid for sid in self.liveVariables.loops]
 
     def __str__(self):
-        res = ""
-
+        res = "Here're the states of each loop in the given program. \n"
+        for sid in self.loops:
+            res += "----------In this loop----------\n"
+            res += "Live Variables are these: \n"
+            res += self.liveVariables.str_of_rdef(sid)
+            res += "Reaching Definitions are these\n"
+            res += self.reachingDefinitions.str_of_rdef(sid)
+        return res
 
 
 class VariablePrinter(NodeVisitor):
