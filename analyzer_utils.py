@@ -30,6 +30,10 @@ class LoopVisitor():
             res += self.liveVariables.str_of_rdef(sid)
             res += "Reaching Definitions are these\n"
             res += self.reachingDefinitions.str_of_rdef(sid)
+            if sid in self.loopRWVisitor.indexes:
+                res += "Indexes used and corresponding update statements\n"
+                for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
+                    res += "Index %s is updated in statement %s\n" % (ind, stmt)
         return res
 
 
@@ -38,6 +42,7 @@ class LoopRWVisitor(NodeVisitor):
     def __init__(self):
         self.readsets = {}
         self.writesets = {}
+        self.indexes = {}
         self.loops = list()
 
     def visit_For(self, forstmt):
@@ -47,6 +52,10 @@ class LoopRWVisitor(NodeVisitor):
         bv.visit(forstmt.stmt)
         self.writesets[forsid] = copy.deepcopy(bv.writeset)
         self.readsets[forsid] = copy.deepcopy(bv.readset)
+
+        self.indexes[forsid] = list()
+        for decl in forstmt.init.decls:
+            self.indexes[forsid].append((decl.name, str(forstmt.next)))
 
     def visit_While(self, whilestmt):
         whilesid = whilestmt.nid
