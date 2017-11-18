@@ -13,15 +13,17 @@ class LoopVisitor():
         self.loops = list()
 
     def visit(self, node):
+        
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
+        
 
     def __str__(self):
         res = "Here're the states of each loop in the given program. \n"
         for sid in self.loops:
-            res += "----------In this loop----------\n"
+            res += "----------In this loop " + str(sid) + " ----------\n"
             res += "Read Variables are these: \n"
             res += str(self.loopRWVisitor.readsets[sid]) + "\n"
             res += "Write Variables are these: \n"
@@ -48,7 +50,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_For(self, forstmt):
         forsid = forstmt.nid
         self.loops.append(forsid)
-        bv = BlockRWVisitor()
+        bv = BlockRWVisitor(self)
         bv.visit(forstmt.stmt)
         self.writesets[forsid] = copy.deepcopy(bv.writeset)
         self.readsets[forsid] = copy.deepcopy(bv.readset)
@@ -60,7 +62,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_While(self, whilestmt):
         whilesid = whilestmt.nid
         self.loops.append(whilesid)
-        bv = BlockRWVisitor()
+        bv = BlockRWVisitor(self)       
         bv.visit(whilestmt.stmt)
         self.writesets[whilesid] = copy.deepcopy(bv.writeset)
         self.readsets[whilesid] = copy.deepcopy(bv.readset)
@@ -68,7 +70,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_DoWhile(self, dowhilestmt):
         dowhilesid = dowhilestmt.nid
         self.loops.append(dowhilesid)
-        bv = BlockRWVisitor()
+        bv = BlockRWVisitor(self)
         bv.visit(dowhilestmt.stmt)
         self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
         self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
@@ -76,14 +78,25 @@ class LoopRWVisitor(NodeVisitor):
 
 class BlockRWVisitor(NodeVisitor):
 
-    def __init__(self):
+    def __init__(self, parent):
         self.readset = set()
         self.writeset = set()
+        self.parent = parent
 
     def visit_Block(self, block):
         wsv = WriteSetVisitor()
-        rsv = ReadSetVisitor()
+        rsv = ReadSetVisitor()        
         for stmt in block.block_items:
+            
+            #check nested loop
+            if isinstance(stmt, For):
+                nest = LoopRWVisitor()
+                nest.visit(stmt)
+                self.parent.writesets.update(copy.deepcopy(nest.writesets))
+                self.parent.readsets.update(copy.deepcopy(nest.readsets))
+                self.parent.indexes.update(copy.deepcopy(nest.indexes))
+                
+          
             wsv.visit(stmt)
             self.writeset = self.writeset.union(wsv.writeset)
             rsv.visit(stmt)
