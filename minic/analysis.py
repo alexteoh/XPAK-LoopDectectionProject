@@ -256,7 +256,7 @@ class LiveVariables(mast.NodeVisitor, DFAnalysis):
         # Update the statements
         self.stmts.update(subvisit.stmts)
         # Update the reaching defs at the exit of the loop
-        self.livevars_stmts.update(self.livevars_stmts)
+        self.livevars_stmts.update(subvisit.livevars_stmts)
         # And finally there might have been loops in there
         # But don't keep duplicates
         self.loops = list(set(self.loops + subvisit.loops))
