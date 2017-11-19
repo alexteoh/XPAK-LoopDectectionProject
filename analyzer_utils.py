@@ -19,93 +19,115 @@ class LoopVisitor():
 
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
-        print "self", self.loops
-        print "self", self.loopRWVisitor.readsets
-        print "self", self.loopRWVisitor.writesets
-        print "self indexes", self.loopRWVisitor.indexes
-        print "self children", self.loopRWVisitor.children
-        print "self", self.liveVariables.str_of_rdef
-
+        
+	
     def __str__(self):
-        res = "Here're the states of each loop in the given program. \n"
-        res += "----------In this loop " + str(sid) + " ----------\n"
-        res += "Read Variables are these: \n"
-        res += str(self.loopRWVisitor.readsets[sid]) + "\n"
-        res += "Write Variables are these: \n"
-        res += str(self.loopRWVisitor.writesets[sid]) + "\n"
-        res += "Live Variables are these: \n"
-        res += self.liveVariables.str_of_rdef(sid)
-        res += "Reaching Definitions are these\n"
-        res += self.reachingDefinitions.str_of_rdef(sid)
-        if sid in self.loopRWVisitor.indexes:
-            res += "Indexes used and corresponding update statements\n"
-            for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
-                res += "Index %s is updated in statement %s\n" % (ind, stmt)
-        return res
+	already_checked = []
+	res = "Here're the states of each loop in the given program. \n"
+	for sid in self.loops:
+	    if sid not in already_checked:
+		child_lst = self.loopRWVisitor.children.get(sid)
+		# case that have a nested loop
+		if child_lst:	    
+		    res += "----------In this loop----------\n"
+		    res += "Read Variables are these: \n"
+		    res += str(self.loopRWVisitor.readsets[sid]) + "\n"
+		    res += "Write Variables are these: \n"
+		    res += str(self.loopRWVisitor.writesets[sid]) + "\n"
+		    res += "Live Variables are these: \n"
+		    res += self.liveVariables.str_of_rdef(sid)
+		    res += "Reaching Definitions are these\n"
+		    res += self.reachingDefinitions.str_of_rdef(sid)  
+		    
+		    if sid in self.loopRWVisitor.indexes:
+			res += "Indexes used and corresponding update statements\n"
+			for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
+			    res += "Index %s is updated in statement %s\n" % (ind, stmt) 
+			    
+		    
+		    buf_blank, buf_res = "", ""
+		    res += "\nHere're the nested loop of this loop. \n"
+		    res += self.nestedloop_printer(buf_res, child_lst, [sid], buf_blank, already_checked)
+		
+		
+		
+		# case do not have a nested loop
+		else:
+		    res += "----------In this loop----------\n"
+		    res += "Read Variables are these: \n"
+		    res += str(loopRWVisitor.readsets[sid]) + "\n"
+		    res += "Write Variables are these: \n"
+		    res += str(loopRWVisitor.writesets[sid]) + "\n"
+		    res += "Live Variables are these: \n"
+		    res += self.liveVariables.str_of_rdef(sid)
+		    res += "Reaching Definitions are these\n"
+		    res += self.reachingDefinitions.str_of_rdef(sid)  
+		    
+		    if sid in loopRWVisitor.indexes:
+			res += "Indexes used and corresponding update statements\n"
+			for (ind, stmt) in loopRWVisitor.indexes[sid]:
+			    res += "Index %s is updated in statement %s\n" % (ind, stmt) 
+			    
+	return res
+	
 
-
-    def nestedloop_printer(self, res, children, parent):
+    def nestedloop_printer(self, res, children, parent, blank, record):
         if not children:
-            return parent
+            return ""
         
         else:
-            for (child, sid) in children:
-                if not child.children:  
-                    
-		    lst = parent + [sid]
-		    lst2 = "["
-		    lst3 = []
-		    for Id in lst:
-			for (ind, stmt) in self.loopRWVisitor.indexes[Id]:
-			    lst2 += ind + ", "
-			    lst3.append(stmt)
+	    
+	    blank += "  "
+            for child_id in children:
+		child_lst = self.loopRWVisitor.children.get(child_id)
+		if child_lst:
+		    record.append(child_id)
+		    index_vector_lst = parent + [child_id]
+		    index_vector = blank + "Index vector: ["
+		    dependent_stmt_lst = []
+		    dependent_stmt = blank + "Dependence vectors: \n"
+		    for rng in index_vector_lst:
+			for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
+			    index_vector += ind + ", "
+			    dependent_stmt_lst.append(stmt)
 			    
-		    lst2 += " ]\n"
-		    res += "Loop nest ...:"
-		    res += "Index vector: " + lst2
-		    res += "Dependence vectors:"
-		    for s in lst3:
-			res += "Statement: " + s
-			                
-                    
-                else:
+		    for s in dependent_stmt_lst:
+			dependent_stmt += blank + "Statement: " + s + "\n"
+			
 		    
-		    lst = parent + [sid]
-		    lst2 = "["
-		    lst3 = []
-		    for Id in lst:
-			for (ind, stmt) in self.loopRWVisitor.indexes[Id]:
-			    lst2 += ind + ", "
-			    lst3.append(stmt)
+		    index_vector = index_vector[:-2]
+		    index_vector += "]\n"
+		    res += blank + "Nested Loop\n"
+		    res += index_vector
+		    res += dependent_stmt + "\n"
+		    parent.append(child_id)
+		    
+		    
+		    return res + self.nestedloop_printer("", child_lst, parent, blank, record)
+		    
+		else:
+		    record.append(child_id)
+		    index_vector_lst = parent + [child_id]
+		    index_vector = blank + "Index vector: ["
+		    dependent_stmt_lst = []
+		    dependent_stmt = blank + "Dependence vectors: \n"
+		    for rng in index_vector_lst:
+			for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
+			    index_vector += ind + ", "
+			    dependent_stmt_lst.append(stmt)
 			    
-		    lst2 += " ]\n"
-		    res += "Loop nest ...:"
-		    res += "Index vector: " + lst2
-		    res += "Dependence vectors:"
-		    for s in lst3:
-			res += "Statement: " + s		    
-                    self.nested_print(res, child.children, parent.append(sid))
-                    
-                    
-            
-            
-            
-                           
-    def normal_print(self, loopRWVisitor, res, sid):
-        res += "----------In this loop----------\n"
-        res += "Read Variables are these: \n"
-        res += str(loopRWVisitor.readsets[sid]) + "\n"
-        res += "Write Variables are these: \n"
-        res += str(loopRWVisitor.writesets[sid]) + "\n"
-        res += "Live Variables are these: \n"
-        res += self.liveVariables.str_of_rdef(sid)
-        res += "Reaching Definitions are these\n"
-        res += self.reachingDefinitions.str_of_rdef(sid)  
-        
-        if sid in loopRWVisitor.indexes:
-            res += "Indexes used and corresponding update statements\n"
-            for (ind, stmt) in loopRWVisitor.indexes[sid]:
-                res += "Index %s is updated in statement %s\n" % (ind, stmt)         
+		    for s in dependent_stmt_lst:
+			dependent_stmt += blank + "Statement: " + s + "\n"
+			
+		    
+		    index_vector = index_vector[:-2]
+		    index_vector += "]\n"
+		    res += index_vector
+		    res += dependent_stmt + "\n"	
+		    
+		    
+		    return res + self.nestedloop_printer("", [], parent, blank, record)
+
         
 
 class LoopRWVisitor(NodeVisitor):
@@ -114,13 +136,14 @@ class LoopRWVisitor(NodeVisitor):
         self.readsets = {}
         self.writesets = {}
         self.indexes = {}
-        self.children = []
+        self.children = {}
         self.loops = list()
 
     def visit_For(self, forstmt):
         forsid = forstmt.nid
         self.loops.append(forsid)
-        bv = BlockRWVisitor(self)
+	self.children[forsid] = []
+        bv = BlockRWVisitor(self, forsid)
         bv.visit(forstmt.stmt)
         self.writesets[forsid] = copy.deepcopy(bv.writeset)
         self.readsets[forsid] = copy.deepcopy(bv.readset)
@@ -132,7 +155,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_While(self, whilestmt):
         whilesid = whilestmt.nid
         self.loops.append(whilesid)
-        bv = BlockRWVisitor(self)       
+        bv = BlockRWVisitor(self, forsid)
         bv.visit(whilestmt.stmt)
         self.writesets[whilesid] = copy.deepcopy(bv.writeset)
         self.readsets[whilesid] = copy.deepcopy(bv.readset)
@@ -140,7 +163,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_DoWhile(self, dowhilestmt):
         dowhilesid = dowhilestmt.nid
         self.loops.append(dowhilesid)
-        bv = BlockRWVisitor(self)
+        bv = BlockRWVisitor(self, forsid)
         bv.visit(dowhilestmt.stmt)
         self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
         self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
@@ -148,10 +171,11 @@ class LoopRWVisitor(NodeVisitor):
 
 class BlockRWVisitor(NodeVisitor):
 
-    def __init__(self, parent):
+    def __init__(self, parent, parentID):
         self.readset = set()
         self.writeset = set()
         self.parent = parent
+	self.parentId = parentID
 
     def visit_Block(self, block):
         wsv = WriteSetVisitor()
@@ -164,16 +188,9 @@ class BlockRWVisitor(NodeVisitor):
                 self.parent.writesets.update(copy.deepcopy(nest.writesets))
                 self.parent.readsets.update(copy.deepcopy(nest.readsets))
                 self.parent.indexes.update(copy.deepcopy(nest.indexes))
-                #self.parent.children.append(stmt.nid)
-                self.parent.children.append((nest, stmt.nid))
+                self.parent.children[self.parentId].append(stmt.nid)
+                self.parent.children.update(copy.deepcopy(nest.children))
             
-                print "self.readset", self.readset
-                print "self.writeset", self.writeset
-                print "nest.indexs", nest.indexes
-                print "nest.readsets", nest.readsets
-                print "nest.writesets", nest.writesets                
-                
-            #print "visit_Block", stmt
             wsv.visit(stmt)
             self.writeset = self.writeset.union(wsv.writeset)
             rsv.visit(stmt)
