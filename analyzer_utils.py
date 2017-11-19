@@ -55,17 +55,17 @@ class LoopVisitor():
 		else:
 		    res += "----------In this loop----------\n"
 		    res += "Read Variables are these: \n"
-		    res += str(loopRWVisitor.readsets[sid]) + "\n"
+		    res += str(self.loopRWVisitor.readsets[sid]) + "\n"
 		    res += "Write Variables are these: \n"
-		    res += str(loopRWVisitor.writesets[sid]) + "\n"
+		    res += str(self.loopRWVisitor.writesets[sid]) + "\n"
 		    res += "Live Variables are these: \n"
 		    res += self.liveVariables.str_of_rdef(sid)
 		    res += "Reaching Definitions are these\n"
 		    res += self.reachingDefinitions.str_of_rdef(sid)  
 		    
-		    if sid in loopRWVisitor.indexes:
+		    if sid in self.loopRWVisitor.indexes:
 			res += "Indexes used and corresponding update statements\n"
-			for (ind, stmt) in loopRWVisitor.indexes[sid]:
+			for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
 			    res += "Index %s is updated in statement %s\n" % (ind, stmt) 
 			    
 	return res
@@ -92,7 +92,7 @@ class LoopVisitor():
 			    dependent_stmt_lst.append(stmt)
 			    
 		    for s in dependent_stmt_lst:
-			dependent_stmt += blank + "Statement: " + s + "\n"
+			dependent_stmt += blank + blank + "Statement: " + s + "\n"
 			
 		    
 		    index_vector = index_vector[:-2]
@@ -117,7 +117,7 @@ class LoopVisitor():
 			    dependent_stmt_lst.append(stmt)
 			    
 		    for s in dependent_stmt_lst:
-			dependent_stmt += blank + "Statement: " + s + "\n"
+			dependent_stmt += blank + blank + "Statement: " + s + "\n"
 			
 		    
 		    index_vector = index_vector[:-2]
