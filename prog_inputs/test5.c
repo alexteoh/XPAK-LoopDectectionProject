@@ -3,7 +3,7 @@ int mss(int *a, int n){
     int sum = 0;
     for(int i = 0; i < n; i++){
         for(int j = 0; j < n; j++) {
-			a[i+1][j-2] = a[i][j]+a[i-1][j];
+			a[i+1][j-2] = a[i][j]+3;
         }
     }
 }
