@@ -13,13 +13,13 @@ class LoopVisitor():
         self.loops = list()
 
     def visit(self, node):
-        
+       
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
-
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
-        
+	
+      
 	
     def __str__(self):
 	already_checked = []
@@ -48,6 +48,7 @@ class LoopVisitor():
 		    buf_blank, buf_res = "", ""
 		    res += "\nHere're the nested loop of this loop. \n"
 		    res += self.nestedloop_printer(buf_res, child_lst, [sid], buf_blank, already_checked)
+		    
 		
 		
 		
@@ -72,6 +73,7 @@ class LoopVisitor():
 	
 
     def nestedloop_printer(self, res, children, parent, blank, record):
+	
         if not children:
             return ""
         
@@ -90,7 +92,8 @@ class LoopVisitor():
 			for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
 			    index_vector += ind + ", "
 			    dependent_stmt_lst.append(stmt)
-			    
+		    
+		    
 		    for s in dependent_stmt_lst:
 			dependent_stmt += blank + blank + "Statement: " + s + "\n"
 			
@@ -103,41 +106,73 @@ class LoopVisitor():
 		    parent.append(child_id)
 		    
 		    
-		    return res + self.nestedloop_printer("", child_lst, parent, blank, record)
+		    res += self.nestedloop_printer("", child_lst, parent, blank, record)
 		    
 		else:
 		    record.append(child_id)
 		    index_vector_lst = parent + [child_id]
 		    index_vector = blank + "Index vector: ["
-		    dependent_stmt_lst = []
-		    dependent_stmt = blank + "Dependence vectors: \n"
+		    dependent_stmt = blank + "D_flow vectors: \n"
+		    dependent_stmt_lst = [] 
+		    dependent_stmt_lst2 = []
 		    for rng in index_vector_lst:
 			for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
 			    index_vector += ind + ", "
-			    dependent_stmt_lst.append(stmt)
 			    
+		
+		    if self.loopRWVisitor.dependence_vector.get(child_id):		
+			
+			lst = self.loopRWVisitor.dependence_vector.get(child_id)
+			states_value = lst[0].values()[0]
+			vector_value_lst = lst[1].values()
+			temp_lst = []
+			temp_lst2 = []
+			for dic in vector_value_lst:
+			    #TODO: need to fix, no state name
+			    for key in states_value.keys():
+				temp_lst.append(int(states_value.get(key)) - int(dic.get(key)))
+				temp_lst2.append(int(dic.get(key)) - int(states_value.get(key)))
+				
+			    dependent_stmt_lst.append(temp_lst)
+			    dependent_stmt_lst2.append(temp_lst2)
+			    temp_lst = []
+			    temp_lst2 = []
+			    
+		    
 		    for s in dependent_stmt_lst:
-			dependent_stmt += blank + blank + "Statement: " + s + "\n"
+			dependent_stmt += blank + blank + "Statement: "+ str(s) + "\n"
+			
+		    
+		    dependent_stmt2 = blank + "D_anti vectors: \n"
+		    
+		    for s in dependent_stmt_lst2:
+			dependent_stmt2 += blank + blank + "Statement: "+ str(s) + "\n"			
 			
 		    
 		    index_vector = index_vector[:-2]
 		    index_vector += "]\n"
 		    res += index_vector
 		    res += dependent_stmt + "\n"	
+		    res += dependent_stmt2 + "\n"	
 		    
 		    
-		    return res + self.nestedloop_printer("", [], parent, blank, record)
+		    res += self.nestedloop_printer("", [], parent, blank, record)
+	    
+	    return res
 
         
 
 class LoopRWVisitor(NodeVisitor):
-
     def __init__(self):
-        self.readsets = {}
-        self.writesets = {}
-        self.indexes = {}
-        self.children = {}
-        self.loops = list()
+	self.readsets = {}
+	self.writesets = {}
+	self.indexes = {}
+	self.children = {}
+	self.loops = list()
+	
+    
+	self.dependence_vector = {}
+	
 
     def visit_For(self, forstmt):
         forsid = forstmt.nid
@@ -168,7 +203,8 @@ class LoopRWVisitor(NodeVisitor):
         self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
         self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
 
-
+	
+	
 class BlockRWVisitor(NodeVisitor):
 
     def __init__(self, parent, parentID):
@@ -176,26 +212,162 @@ class BlockRWVisitor(NodeVisitor):
         self.writeset = set()
         self.parent = parent
 	self.parentId = parentID
+	
 
     def visit_Block(self, block):
         wsv = WriteSetVisitor()
-        rsv = ReadSetVisitor()        
+        rsv = ReadSetVisitor()  
+	
         for stmt in block.block_items:
+	    #print "inside block: ", stmt
+	    
             #check nested loop
             if isinstance(stmt, For) or isinstance(stmt, DoWhile) or isinstance(stmt, While):
                 nest = LoopRWVisitor()
                 nest.visit(stmt)
+		
                 self.parent.writesets.update(copy.deepcopy(nest.writesets))
                 self.parent.readsets.update(copy.deepcopy(nest.readsets))
                 self.parent.indexes.update(copy.deepcopy(nest.indexes))
                 self.parent.children[self.parentId].append(stmt.nid)
                 self.parent.children.update(copy.deepcopy(nest.children))
-            
+		
+	    dva = DepedenceVectorAnalysis(stmt.nid)
+	    dva.visit(stmt)
+	    self.parent.dependence_vector.update(dva.lst)
+            		
             wsv.visit(stmt)
             self.writeset = self.writeset.union(wsv.writeset)
             rsv.visit(stmt)
             self.readset = self.readset.union(rsv.readset)
 
+
+class DepedenceVectorAnalysis(NodeVisitor):
+    def __init__(self, parentID):
+	self.lst = {}
+	self.parentID = parentID
+	self.states = {}
+	self.dependence_vector = {}
+	
+    
+    def visit_Assignment(self, assignment):
+	#handle lefthand side, and left side must be ArrayRef
+	
+	if isinstance(assignment.lvalue, ArrayRef):
+	    fa_left = FetchArrayRef()
+	    fa_left.visit(assignment.lvalue)
+	    self.states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, fa_left.key, fa_left.value)))
+	
+	#handle righthand side
+	
+	#case: a[i][j]
+	if isinstance(assignment.rvalue, ArrayRef):
+	    fa_right = FetchArrayRef()
+	    fa_right.visit(assignment.rvalue)
+	    
+	    self.dependence_vector.update(copy.deepcopy(helper_construct(assignment.rvalue.name, fa_right.key, fa_right.value)))
+	
+	#case:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
+	elif isinstance(assignment.rvalue, BinaryOp):
+	    
+	    fb_right = FetchBinaryOp()
+	    fb_right.visit(assignment.rvalue)
+	    
+	    self.dependence_vector.update(copy.deepcopy(fb_right.states))
+	    
+	    
+	elif isinstance(assignment.rvalue, Constant):
+	    pass
+	
+	
+	else:
+	    pass
+    
+	
+	self.lst[self.parentID] = [self.states, self.dependence_vector]
+	
+    
+
+class FetchArrayRef(NodeVisitor):
+    def __init__(self):
+	self.key = []
+	self.value = []
+	
+    def visit_ArrayRef(self, ref):
+	
+	#base case
+	if isinstance(ref.name, ID): 
+	    self.condition_analysis(ref.subscript)	
+	
+	else:
+	    self.condition_analysis(ref.subscript)		
+	    self.visit_ArrayRef(ref.name)
+	    
+    def condition_analysis(self, most_right):
+	
+	if isinstance(most_right, ID):
+	    self.key.append(most_right.name)
+	    self.value.append("0")
+	if isinstance(most_right, Constant):
+	    #currently ignore this case
+	    pass
+	
+	if isinstance(most_right, BinaryOp):
+	    if most_right.op == "+":
+		if isinstance(most_right.left, ID):
+		    self.key.append(most_right.left.name)
+		    
+		    self.value.append(most_right.right.value)
+		else:
+		    self.key.append(most_right.right.name)
+		    self.value.append(most_right.left.value)
+		    
+	    if most_right.op == "-":
+		if isinstance(most_right.left, ID):
+		    self.key.append(most_right.left.name)
+		    self.value.append("-" + most_right.right.value)
+		else:
+		    self.key.append(most_right.right.name)
+		    self.value.append("-" + most_right.left.value)	
+	
+	
+class FetchBinaryOp(NodeVisitor):
+    def __init__(self):
+	self.states = dict()
+	
+    def visit_BinaryOp(self, binaryop):
+	#base case
+	if isinstance(binaryop.left, ID): 
+	    return 
+	
+	if isinstance(binaryop.left, ArrayRef): 
+	    self.condition_analysis(binaryop.left)
+	    self.condition_analysis(binaryop.right)	
+	
+	else:
+	    self.condition_analysis(binaryop.right)		
+	    self.visit_BinaryOp(binaryop.left)	
+	    
+	    
+    def condition_analysis(self, most_right):
+	if isinstance(most_right, ArrayRef):
+	    fa = FetchArrayRef()
+	    fa.visit(most_right)
+	    
+	    self.states.update(copy.deepcopy(helper_construct(most_right, fa.key, fa.value)))
+	
+	
+def helper_construct(state, keys, values):
+    output_dict = dict()
+    val_dict = dict()
+    
+    for i in range(len(keys)):
+	val_dict[keys[i]] = values[i]
+    
+    output_dict[state] = val_dict
+    return output_dict	    
+	
+    
 
 class VariablePrinter(NodeVisitor):
     # The type of node a function visits depends on its name
