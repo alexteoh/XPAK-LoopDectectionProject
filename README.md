@@ -12,3 +12,4 @@ CSC410 Software Verification and Testing (FALL 2017)
 
 ## Tool Reference
 1. Git submodule management: https://git-scm.com/book/en/v2/Git-Tools-Submodules
+2. Victor's Pyminic: https://github.com/victornicolet/pyminic
