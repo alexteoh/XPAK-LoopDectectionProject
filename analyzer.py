@@ -1,5 +1,5 @@
 from pycparser import parse_file
-from minic.c_ast_to_minic import transform
+from pyminic.minic.c_ast_to_minic import transform
 from analyzer_utils import *
 
 import os

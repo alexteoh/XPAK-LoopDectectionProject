@@ -1,5 +1,5 @@
-from minic.minic_ast import *
-from minic.analysis import *
+from pyminic.minic.minic_ast import *
+from pyminic.minic.analysis import *
 import copy
 
 
