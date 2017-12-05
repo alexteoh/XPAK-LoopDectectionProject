@@ -3,24 +3,34 @@ from pyminic.minic.analysis import *
 import copy
 
 
+# A class to iterate through an AST tree and collect loop information
+# It launches several NodeVisiter objects to get various required information.
 class LoopVisitor():
     def __init__(self):
-        # The 'memory' of the node: the set of variables we are writing in.
+        # NodeVisitor to collect live variables set
         self.liveVariables = LiveVariables()
+        # NodeVisitor to collect reaching definitions set
         self.reachingDefinitions = ReachingDefinitions()
+        # NodeVisitor to collect read/write variables set in loop constructs
         self.loopRWVisitor = LoopRWVisitor()
+
+        # List of loop statement ID (should be common in all NodeVisitors).
         self.loops = list()
 
+    # Launch all NodeVisitors to go through the AST
     def visit(self, node):
-
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
+        # self.loops = [sid for sid in self.loopRWVisitor.loops]
 
+
+    # String representation of the information collected by this class
     def __str__(self):
         already_checked = []
         res = "Here're the states of each loop in the given program. \n"
+
         for sid in self.loops:
             if sid not in already_checked:
                 child_lst = self.loopRWVisitor.children.get(sid)
@@ -28,13 +38,13 @@ class LoopVisitor():
                 if child_lst:
                     res += "----------In this loop----------\n"
                     res += "Read Variables are these: \n"
-                    res += str(self.loopRWVisitor.readsets[sid]) + "\n"
+                    res += "\t" + str(self.loopRWVisitor.readsets[sid]) + "\n"
                     res += "Write Variables are these: \n"
-                    res += str(self.loopRWVisitor.writesets[sid]) + "\n"
+                    res += "\t" + str(self.loopRWVisitor.writesets[sid]) + "\n"
                     res += "Live Variables are these: \n"
-                    res += self.liveVariables.str_of_rdef(sid)
+                    res += "\t" + self.liveVariables.str_of_rdef(sid)
                     res += "Reaching Definitions are these\n"
-                    res += self.reachingDefinitions.str_of_rdef(sid)
+                    res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
                     if sid in self.loopRWVisitor.indexes:
                         res += "Indexes used and corresponding update statements\n"
@@ -45,20 +55,17 @@ class LoopVisitor():
                     res += "\nHere're the nested loop of this loop. \n"
                     res += self.nestedloop_printer(buf_res, child_lst, [sid], buf_blank, already_checked)
 
-
-
-
                 # case do not have a nested loop
                 else:
                     res += "----------In this loop----------\n"
                     res += "Read Variables are these: \n"
-                    res += str(self.loopRWVisitor.readsets[sid]) + "\n"
+                    res += "\t" + str(self.loopRWVisitor.readsets[sid]) + "\n"
                     res += "Write Variables are these: \n"
-                    res += str(self.loopRWVisitor.writesets[sid]) + "\n"
+                    res += "\t" + str(self.loopRWVisitor.writesets[sid]) + "\n"
                     res += "Live Variables are these: \n"
-                    res += self.liveVariables.str_of_rdef(sid)
+                    res += "\t" + self.liveVariables.str_of_rdef(sid)
                     res += "Reaching Definitions are these\n"
-                    res += self.reachingDefinitions.str_of_rdef(sid)
+                    res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
                     if sid in self.loopRWVisitor.indexes:
                         res += "Indexes used and corresponding update statements\n"
@@ -67,6 +74,7 @@ class LoopVisitor():
 
         return res
 
+    # Print information in the nested loops.
     def nestedloop_printer(self, res, children, parent, blank, record):
 
         if not children:
@@ -148,6 +156,7 @@ class LoopVisitor():
             return res
 
 
+# NodeVisitor that tracks read/write variable sets in loops.
 class LoopRWVisitor(NodeVisitor):
     def __init__(self):
         self.readsets = {}
@@ -185,18 +194,19 @@ class LoopRWVisitor(NodeVisitor):
     def visit_DoWhile(self, dowhilestmt):
         dowhilesid = dowhilestmt.nid
         self.loops.append(dowhilesid)
-        bv = BlockRWVisitor(self, forsid)
+        bv = BlockRWVisitor(self, dowhilesid)
         bv.visit(dowhilestmt.stmt)
         self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
         self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
 
 
+# NodeVisitor that collects information in a block statemnt
 class BlockRWVisitor(NodeVisitor):
-    def __init__(self, parent, parentID):
+    def __init__(self, parent, parentSID):
         self.readset = set()
         self.writeset = set()
         self.parent = parent
-        self.parentId = parentID
+        self.parentSID = parentSID
 
     def visit_Block(self, block):
         wsv = WriteSetVisitor()
@@ -213,7 +223,7 @@ class BlockRWVisitor(NodeVisitor):
                 self.parent.writesets.update(copy.deepcopy(nest.writesets))
                 self.parent.readsets.update(copy.deepcopy(nest.readsets))
                 self.parent.indexes.update(copy.deepcopy(nest.indexes))
-                self.parent.children[self.parentId].append(stmt.nid)
+                self.parent.children[self.parentSID].append(stmt.nid)
                 self.parent.children.update(copy.deepcopy(nest.children))
 
             dva = DepedenceVectorAnalysis(stmt.nid)
@@ -226,6 +236,7 @@ class BlockRWVisitor(NodeVisitor):
             self.readset = self.readset.union(rsv.readset)
 
 
+# NodeVisitor that do dependence vector analysis
 class DepedenceVectorAnalysis(NodeVisitor):
     def __init__(self, parentID):
         self.lst = {}
@@ -241,7 +252,7 @@ class DepedenceVectorAnalysis(NodeVisitor):
             fa_left.visit(assignment.lvalue)
             self.states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, fa_left.key, fa_left.value)))
 
-        # handle righthand side
+        # handle right-hand side
 
         # case: a[i][j]
         if isinstance(assignment.rvalue, ArrayRef):
@@ -270,6 +281,7 @@ class DepedenceVectorAnalysis(NodeVisitor):
         self.lst[self.parentID] = [self.states, self.dependence_vector]
 
 
+# NodeVisitor that collect array reference information
 class FetchArrayRef(NodeVisitor):
     def __init__(self):
         self.key = []
@@ -348,6 +360,12 @@ def helper_construct(state, keys, values):
     output_dict[state] = val_dict
     return output_dict
 
+
+##################################
+#
+# Helper functions that are adopted from tutorial
+#
+##################################
 
 class VariablePrinter(NodeVisitor):
     # The type of node a function visits depends on its name
