@@ -4,7 +4,7 @@ import copy
 
 
 # A class to iterate through an AST tree and collect loop information
-# It launches several NodeVisiter objects to get various required information.
+# It launches several NodeVisitor objects to get various required information.
 class LoopVisitor():
     def __init__(self):
         # NodeVisitor to collect live variables set
@@ -24,7 +24,6 @@ class LoopVisitor():
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
         # self.loops = [sid for sid in self.loopRWVisitor.loops]
-
 
     # String representation of the information collected by this class
     def __str__(self):
@@ -48,94 +47,71 @@ class LoopVisitor():
                     for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
                         res += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
 
-                nested_loops = self.loopRWVisitor.children.get(sid)
+                nested_loops = self.loopRWVisitor.loop_hierarchy.get(sid)
                 # If there's nested loops within this loop
                 if nested_loops:
                     res += "\nNested Loops information: \n"
-                    res += self.nestedloop_printer("", nested_loops, [sid], "", already_checked)
+                    res += self.nestedloop_printer(nested_loops, sid, "", already_checked)
+                    # res += self.nestedloop_printer("", nested_loops, [sid], "", already_checked)
 
         return res
 
-    # Print information in the nested loops.
-    def nestedloop_printer(self, res, children, parent, blank, record):
+    # Print nested loops information (e.g. index vectors, dependence vectors)
+    def nestedloop_printer(self, nested_loops, parent_loop_sid, print_indent, record):
+        print_indent += "\t"
+        print_output = ""
 
-        if not children:
-            return ""
+        for loop_sid in nested_loops:
+            record.append(loop_sid)
+            loop_sids = [parent_loop_sid] + [loop_sid]
+            index_vectors_str = print_indent + "Index vector: ["
+            dependent_stmt_str = print_indent + "Dependence vectors: \n"
+            for sid in loop_sids:
+                for ind, stmt in self.loopRWVisitor.indexes[sid]:
+                    index_vectors_str += ind + ", "
+                    dependent_stmt_str += print_indent + print_indent + "Statement: " + str(stmt) + "\n"
 
-        else:
+            index_vectors_str = index_vectors_str.rstrip(',')
+            index_vectors_str += "]\n"
+            print_output += print_indent + "------- Nested Loop ------\n"
+            print_output += index_vectors_str
+            print_output += dependent_stmt_str + "\n"
 
-            blank += "  "
-            for child_id in children:
-                child_lst = self.loopRWVisitor.children.get(child_id)
-                if child_lst:
-                    record.append(child_id)
-                    index_vector_lst = parent + [child_id]
-                    index_vector = blank + "Index vector: ["
-                    dependent_stmt_lst = []
-                    dependent_stmt = blank + "Dependence vectors: \n"
-                    for rng in index_vector_lst:
-                        for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
-                            index_vector += ind + ", "
-                            dependent_stmt_lst.append(stmt)
+            dependence_vectors = self.loopRWVisitor.dependence_vector.get(loop_sid)
+            if dependence_vectors:
+                D_flow_vector_str = print_indent + "D_flow vectors: \n"
+                D_anti_vectors_str = print_indent + "D_anti vectors: \n"
+                D_flow_vectors = []
+                D_anti_vectors = []
 
-                    for s in dependent_stmt_lst:
-                        dependent_stmt += blank + blank + "Statement: " + s + "\n"
+                states_value = dependence_vectors[0].values()[0]
+                vector_value_lst = dependence_vectors[1].values()
+                for dic in vector_value_lst:
+                    temp_lst = []
+                    temp_lst2 = []
+                    # TODO: need to fix, no state name
+                    for key in states_value.keys():
+                        if key not in dic:
+                            continue
+                        temp_lst.append(int(states_value.get(key)) - int(dic.get(key)))
+                        temp_lst2.append(int(dic.get(key)) - int(states_value.get(key)))
 
-                    index_vector = index_vector[:-2]
-                    index_vector += "]\n"
-                    res += blank + "Nested Loop\n"
-                    res += index_vector
-                    res += dependent_stmt + "\n"
-                    parent.append(child_id)
+                    D_flow_vectors.append(temp_lst)
+                    D_anti_vectors.append(temp_lst2)
 
-                    res += self.nestedloop_printer("", child_lst, parent, blank, record)
+                for s in D_flow_vectors:
+                    D_flow_vector_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
+                for s in D_anti_vectors:
+                    D_anti_vectors_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
 
-                else:
-                    record.append(child_id)
-                    index_vector_lst = parent + [child_id]
-                    index_vector = blank + "Index vector: ["
-                    dependent_stmt = blank + "D_flow vectors: \n"
-                    dependent_stmt_lst = []
-                    dependent_stmt_lst2 = []
-                    for rng in index_vector_lst:
-                        for (ind, stmt) in self.loopRWVisitor.indexes[rng]:
-                            index_vector += ind + ", "
+                print_output += D_flow_vector_str + "\n"
+                print_output += D_anti_vectors_str + "\n"
 
-                    if self.loopRWVisitor.dependence_vector.get(child_id):
+            doubly_nested_loops = self.loopRWVisitor.loop_hierarchy.get(loop_sid)
+            if doubly_nested_loops:
+                print_output += self.nestedloop_printer(doubly_nested_loops, loop_sids, print_indent, record)
 
-                        lst = self.loopRWVisitor.dependence_vector.get(child_id)
-                        states_value = lst[0].values()[0]
-                        vector_value_lst = lst[1].values()
-                        temp_lst = []
-                        temp_lst2 = []
-                        for dic in vector_value_lst:
-                            # TODO: need to fix, no state name
-                            for key in states_value.keys():
-                                temp_lst.append(int(states_value.get(key)) - int(dic.get(key)))
-                                temp_lst2.append(int(dic.get(key)) - int(states_value.get(key)))
-
-                            dependent_stmt_lst.append(temp_lst)
-                            dependent_stmt_lst2.append(temp_lst2)
-                            temp_lst = []
-                            temp_lst2 = []
-
-                    for s in dependent_stmt_lst:
-                        dependent_stmt += blank + blank + "Statement: " + str(s) + "\n"
-
-                    dependent_stmt2 = blank + "D_anti vectors: \n"
-
-                    for s in dependent_stmt_lst2:
-                        dependent_stmt2 += blank + blank + "Statement: " + str(s) + "\n"
-
-                    index_vector = index_vector[:-2]
-                    index_vector += "]\n"
-                    res += index_vector
-                    res += dependent_stmt + "\n"
-                    res += dependent_stmt2 + "\n"
-
-                    res += self.nestedloop_printer("", [], parent, blank, record)
-
-            return res
+        return print_output
 
 
 # NodeVisitor that tracks read/write variable sets in loops.
@@ -144,7 +120,7 @@ class LoopRWVisitor(NodeVisitor):
         self.readSets = {}
         self.writeSets = {}
         self.indexes = {}
-        self.children = {}
+        self.loop_hierarchy = {}
         self.loops = list()
 
         self.dependence_vector = {}
@@ -152,7 +128,7 @@ class LoopRWVisitor(NodeVisitor):
     def visit_For(self, forstmt):
         forsid = forstmt.nid
         self.loops.append(forsid)
-        self.children[forsid] = []
+        self.loop_hierarchy[forsid] = []
         bv = BlockRWVisitor(self, forsid)
         bv.visit(forstmt.stmt)
         self.writeSets[forsid] = copy.deepcopy(bv.writeSet)
@@ -182,7 +158,7 @@ class LoopRWVisitor(NodeVisitor):
         self.readSets[dowhilesid] = copy.deepcopy(bv.readSet)
 
 
-# NodeVisitor that collects information in a block statemnt
+# NodeVisitor that collects information in a block statement
 class BlockRWVisitor(NodeVisitor):
     def __init__(self, parent, parentSID):
         self.readSet = set()
@@ -205,12 +181,15 @@ class BlockRWVisitor(NodeVisitor):
                 self.parent.writeSets.update(copy.deepcopy(nest.writeSets))
                 self.parent.readSets.update(copy.deepcopy(nest.readSets))
                 self.parent.indexes.update(copy.deepcopy(nest.indexes))
-                self.parent.children[self.parentSID].append(stmt.nid)
-                self.parent.children.update(copy.deepcopy(nest.children))
+                self.parent.loop_hierarchy[self.parentSID].append(stmt.nid)
+                self.parent.loop_hierarchy.update(copy.deepcopy(nest.loop_hierarchy))
 
-            dva = DepedenceVectorAnalysis(stmt.nid)
+            dva = DependenceVectorAnalysis(stmt.nid)
             dva.visit(stmt)
             self.parent.dependence_vector.update(dva.lst)
+            # if isinstance(stmt, Assignment):
+            #     d_mapping = generate_dependency_mapping(stmt)
+            #     self.parent.dependence_vector.update(d_mapping)
 
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
@@ -219,7 +198,7 @@ class BlockRWVisitor(NodeVisitor):
 
 
 # NodeVisitor that do dependence vector analysis
-class DepedenceVectorAnalysis(NodeVisitor):
+class DependenceVectorAnalysis(NodeVisitor):
     def __init__(self, parentID):
         self.lst = {}
         self.parentID = parentID
@@ -247,9 +226,40 @@ class DepedenceVectorAnalysis(NodeVisitor):
         self.lst[self.parentID] = [self.states, self.dependence_vector]
 
 
+def generate_dependency_mapping(assignment):
+    if not isinstance(assignment, Assignment):
+        # Sanity check
+        assert False
+        return None
+
+    d_mapping = {}
+    states = {}
+    d_vectors = {}
+
+    # handle left-hand side which must be ArrayRef
+    if isinstance(assignment.lvalue, ArrayRef):
+        key, val = process_ArrayRef(assignment.lvalue)
+        states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, key, val)))
+
+    # handle right-hand side
+    # example: a[i][j]
+    if isinstance(assignment.rvalue, ArrayRef):
+        key, val = process_ArrayRef(assignment.rvalue)
+        d_vectors.update(copy.deepcopy(helper_construct(assignment.rvalue.name, key, val)))
+
+    # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
+    elif isinstance(assignment.rvalue, BinaryOp):
+        sub_states = process_BinaryOp(assignment.rvalue)
+        d_vectors.update(copy.deepcopy(sub_states))
+
+    d_mapping[assignment.nid] = [states, d_vectors]
+    return d_mapping
+
+
 def process_BinaryOp(binaryOp):
     if not isinstance(binaryOp, BinaryOp):
         # Sanity check
+        assert False
         return None
 
     states = dict()
@@ -274,6 +284,7 @@ def process_BinaryOp(binaryOp):
 def process_ArrayRef(ref):
     if not isinstance(ref, ArrayRef):
         # Sanity check
+        assert False
         return None, None
 
     index = []
