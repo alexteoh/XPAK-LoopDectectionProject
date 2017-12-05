@@ -44,9 +44,9 @@ class LoopVisitor():
                 res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
                 if sid in self.loopRWVisitor.indexes:
-                    res += "\nIndexes used and corresponding update statements\n"
+                    res += "\nIndexes used and corresponding update statements:\n"
                     for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
-                        res += "Index %s is updated in statement %s\n" % (ind, stmt)
+                        res += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
 
                 nested_loops = self.loopRWVisitor.children.get(sid)
                 # If there's nested loops within this loop
@@ -230,106 +230,90 @@ class DepedenceVectorAnalysis(NodeVisitor):
         # handle lefthand side, and left side must be ArrayRef
 
         if isinstance(assignment.lvalue, ArrayRef):
-            fa_left = FetchArrayRef()
-            fa_left.visit(assignment.lvalue)
-            self.states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, fa_left.key, fa_left.value)))
+            key, val = process_ArrayRef(assignment.lvalue)
+            self.states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, key, val)))
 
         # handle right-hand side
-
-        # case: a[i][j]
+        # example: a[i][j]
         if isinstance(assignment.rvalue, ArrayRef):
-            fa_right = FetchArrayRef()
-            fa_right.visit(assignment.rvalue)
+            key, val = process_ArrayRef(assignment.rvalue)
+            self.dependence_vector.update(copy.deepcopy(helper_construct(assignment.rvalue.name, key, val)))
 
-            self.dependence_vector.update(
-                copy.deepcopy(helper_construct(assignment.rvalue.name, fa_right.key, fa_right.value)))
-
-        # case:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
+        # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
         elif isinstance(assignment.rvalue, BinaryOp):
-
-            fb_right = FetchBinaryOp()
-            fb_right.visit(assignment.rvalue)
-
-            self.dependence_vector.update(copy.deepcopy(fb_right.states))
-
-
-        elif isinstance(assignment.rvalue, Constant):
-            pass
-
-
-        else:
-            pass
+            states = process_BinaryOp(assignment.rvalue)
+            self.dependence_vector.update(copy.deepcopy(states))
 
         self.lst[self.parentID] = [self.states, self.dependence_vector]
 
 
-# NodeVisitor that collect array reference information
-class FetchArrayRef(NodeVisitor):
-    def __init__(self):
-        self.key = []
-        self.value = []
+def process_BinaryOp(binaryOp):
+    if not isinstance(binaryOp, BinaryOp):
+        # Sanity check
+        return None
 
-    def visit_ArrayRef(self, ref):
+    states = dict()
 
-        # base case
-        if isinstance(ref.name, ID):
-            self.condition_analysis(ref.subscript)
+    def process_subscript(subscript):
+        if isinstance(subscript, ArrayRef):
+            index, d_value = process_ArrayRef(subscript)
+            states.update(copy.deepcopy(helper_construct(subscript, index, d_value)))
 
-        else:
-            self.condition_analysis(ref.subscript)
-            self.visit_ArrayRef(ref.name)
+    # Base case
+    if isinstance(binaryOp.left, ArrayRef):
+        process_subscript(binaryOp.left)
+        process_subscript(binaryOp.right)
+    else:
+        process_subscript(binaryOp.right)
+        if isinstance(binaryOp.left, BinaryOp):
+           states.update(process_BinaryOp(binaryOp.left))
 
-    def condition_analysis(self, most_right):
+    return states
 
-        if isinstance(most_right, ID):
-            self.key.append(most_right.name)
-            self.value.append("0")
-        if isinstance(most_right, Constant):
-            # currently ignore this case
-            pass
 
-        if isinstance(most_right, BinaryOp):
-            if most_right.op == "+":
-                if isinstance(most_right.left, ID):
-                    self.key.append(most_right.left.name)
+def process_ArrayRef(ref):
+    if not isinstance(ref, ArrayRef):
+        # Sanity check
+        return None, None
 
-                    self.value.append(most_right.right.value)
+    index = []
+    d_value = []
+
+    def process_subscript(subscript):
+        if isinstance(subscript, ID):
+            index.append(subscript.name)
+            d_value.append("0")
+        elif isinstance(subscript, BinaryOp):
+            if subscript.op == "+":
+                if isinstance(subscript.left, ID):
+                    index.append(subscript.left.name)
+
+                    d_value.append(subscript.right.value)
                 else:
-                    self.key.append(most_right.right.name)
-                    self.value.append(most_right.left.value)
+                    index.append(subscript.right.name)
+                    d_value.append(subscript.left.value)
 
-            if most_right.op == "-":
-                if isinstance(most_right.left, ID):
-                    self.key.append(most_right.left.name)
-                    self.value.append("-" + most_right.right.value)
+            elif subscript.op == "-":
+                if isinstance(subscript.left, ID):
+                    index.append(subscript.left.name)
+                    d_value.append("-" + subscript.right.value)
                 else:
-                    self.key.append(most_right.right.name)
-                    self.value.append("-" + most_right.left.value)
+                    index.append(subscript.right.name)
+                    d_value.append("-" + subscript.left.value)
 
+    # Base case
+    if isinstance(ref.name, ID):
+        # example: if ref is a[i], then ref.name is a and ref.subscript is i
+        process_subscript(ref.subscript)
 
-class FetchBinaryOp(NodeVisitor):
-    def __init__(self):
-        self.states = dict()
+    else:
+        process_subscript(ref.subscript)
+        if isinstance(ref.name, ArrayRef):
+            more_index, more_d_value = process_ArrayRef(ref.name)
+            index.extend(more_index)
+            d_value.extend(more_d_value)
 
-    def visit_BinaryOp(self, binaryop):
-        # base case
-        if isinstance(binaryop.left, ID):
-            return
-
-        if isinstance(binaryop.left, ArrayRef):
-            self.condition_analysis(binaryop.left)
-            self.condition_analysis(binaryop.right)
-
-        else:
-            self.condition_analysis(binaryop.right)
-            self.visit_BinaryOp(binaryop.left)
-
-    def condition_analysis(self, most_right):
-        if isinstance(most_right, ArrayRef):
-            fa = FetchArrayRef()
-            fa.visit(most_right)
-
-            self.states.update(copy.deepcopy(helper_construct(most_right, fa.key, fa.value)))
+    return index, d_value
 
 
 def helper_construct(state, keys, values):
