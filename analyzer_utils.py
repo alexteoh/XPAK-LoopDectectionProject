@@ -33,44 +33,26 @@ class LoopVisitor():
 
         for sid in self.loops:
             if sid not in already_checked:
-                child_lst = self.loopRWVisitor.children.get(sid)
-                # case that have a nested loop
-                if child_lst:
-                    res += "----------In this loop----------\n"
-                    res += "Read Variables are these: \n"
-                    res += "\t" + str(self.loopRWVisitor.readsets[sid]) + "\n"
-                    res += "Write Variables are these: \n"
-                    res += "\t" + str(self.loopRWVisitor.writesets[sid]) + "\n"
-                    res += "Live Variables are these: \n"
-                    res += "\t" + self.liveVariables.str_of_rdef(sid)
-                    res += "Reaching Definitions are these\n"
-                    res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
+                res += "----------In this loop----------\n"
+                res += "Read Variables are these: \n"
+                res += "\t" + str(self.loopRWVisitor.readSets[sid]) + "\n"
+                res += "Write Variables are these: \n"
+                res += "\t" + str(self.loopRWVisitor.writeSets[sid]) + "\n"
+                res += "Live Variables are these: \n"
+                res += "\t" + self.liveVariables.str_of_rdef(sid)
+                res += "Reaching Definitions are these\n"
+                res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
-                    if sid in self.loopRWVisitor.indexes:
-                        res += "Indexes used and corresponding update statements\n"
-                        for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
-                            res += "Index %s is updated in statement %s\n" % (ind, stmt)
+                if sid in self.loopRWVisitor.indexes:
+                    res += "\nIndexes used and corresponding update statements\n"
+                    for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
+                        res += "Index %s is updated in statement %s\n" % (ind, stmt)
 
-                    buf_blank, buf_res = "", ""
-                    res += "\nHere're the nested loop of this loop. \n"
-                    res += self.nestedloop_printer(buf_res, child_lst, [sid], buf_blank, already_checked)
-
-                # case do not have a nested loop
-                else:
-                    res += "----------In this loop----------\n"
-                    res += "Read Variables are these: \n"
-                    res += "\t" + str(self.loopRWVisitor.readsets[sid]) + "\n"
-                    res += "Write Variables are these: \n"
-                    res += "\t" + str(self.loopRWVisitor.writesets[sid]) + "\n"
-                    res += "Live Variables are these: \n"
-                    res += "\t" + self.liveVariables.str_of_rdef(sid)
-                    res += "Reaching Definitions are these\n"
-                    res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
-
-                    if sid in self.loopRWVisitor.indexes:
-                        res += "Indexes used and corresponding update statements\n"
-                        for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
-                            res += "Index %s is updated in statement %s\n" % (ind, stmt)
+                nested_loops = self.loopRWVisitor.children.get(sid)
+                # If there's nested loops within this loop
+                if nested_loops:
+                    res += "\nNested Loops information: \n"
+                    res += self.nestedloop_printer("", nested_loops, [sid], "", already_checked)
 
         return res
 
@@ -159,8 +141,8 @@ class LoopVisitor():
 # NodeVisitor that tracks read/write variable sets in loops.
 class LoopRWVisitor(NodeVisitor):
     def __init__(self):
-        self.readsets = {}
-        self.writesets = {}
+        self.readSets = {}
+        self.writeSets = {}
         self.indexes = {}
         self.children = {}
         self.loops = list()
@@ -173,8 +155,8 @@ class LoopRWVisitor(NodeVisitor):
         self.children[forsid] = []
         bv = BlockRWVisitor(self, forsid)
         bv.visit(forstmt.stmt)
-        self.writesets[forsid] = copy.deepcopy(bv.writeset)
-        self.readsets[forsid] = copy.deepcopy(bv.readset)
+        self.writeSets[forsid] = copy.deepcopy(bv.writeSet)
+        self.readSets[forsid] = copy.deepcopy(bv.readSet)
 
         self.indexes[forsid] = list()
         if hasattr(forstmt.init, 'decls'):
@@ -188,23 +170,23 @@ class LoopRWVisitor(NodeVisitor):
         self.loops.append(whilesid)
         bv = BlockRWVisitor(self, whilesid)
         bv.visit(whilestmt.stmt)
-        self.writesets[whilesid] = copy.deepcopy(bv.writeset)
-        self.readsets[whilesid] = copy.deepcopy(bv.readset)
+        self.writeSets[whilesid] = copy.deepcopy(bv.writeSet)
+        self.readSets[whilesid] = copy.deepcopy(bv.readSet)
 
     def visit_DoWhile(self, dowhilestmt):
         dowhilesid = dowhilestmt.nid
         self.loops.append(dowhilesid)
         bv = BlockRWVisitor(self, dowhilesid)
         bv.visit(dowhilestmt.stmt)
-        self.writesets[dowhilesid] = copy.deepcopy(bv.writeset)
-        self.readsets[dowhilesid] = copy.deepcopy(bv.readset)
+        self.writeSets[dowhilesid] = copy.deepcopy(bv.writeSet)
+        self.readSets[dowhilesid] = copy.deepcopy(bv.readSet)
 
 
 # NodeVisitor that collects information in a block statemnt
 class BlockRWVisitor(NodeVisitor):
     def __init__(self, parent, parentSID):
-        self.readset = set()
-        self.writeset = set()
+        self.readSet = set()
+        self.writeSet = set()
         self.parent = parent
         self.parentSID = parentSID
 
@@ -220,8 +202,8 @@ class BlockRWVisitor(NodeVisitor):
                 nest = LoopRWVisitor()
                 nest.visit(stmt)
 
-                self.parent.writesets.update(copy.deepcopy(nest.writesets))
-                self.parent.readsets.update(copy.deepcopy(nest.readsets))
+                self.parent.writeSets.update(copy.deepcopy(nest.writeSets))
+                self.parent.readSets.update(copy.deepcopy(nest.readSets))
                 self.parent.indexes.update(copy.deepcopy(nest.indexes))
                 self.parent.children[self.parentSID].append(stmt.nid)
                 self.parent.children.update(copy.deepcopy(nest.children))
@@ -231,9 +213,9 @@ class BlockRWVisitor(NodeVisitor):
             self.parent.dependence_vector.update(dva.lst)
 
             wsv.visit(stmt)
-            self.writeset = self.writeset.union(wsv.writeset)
+            self.writeSet = self.writeSet.union(wsv.writeSet)
             rsv.visit(stmt)
-            self.readset = self.readset.union(rsv.readset)
+            self.readSet = self.readSet.union(rsv.readSet)
 
 
 # NodeVisitor that do dependence vector analysis
@@ -381,7 +363,7 @@ class VariablePrinter(NodeVisitor):
 class WriteSetVisitor(NodeVisitor):
     def __init__(self):
         # The 'memory' of the node: the set of variables we are writing in.
-        self.writeset = set()
+        self.writeSet = set()
 
     # What we do when we visit an assignment.
     def visit_Assignment(self, assignment):
@@ -390,13 +372,13 @@ class WriteSetVisitor(NodeVisitor):
         # very simple analysis.
 
         if isinstance(assignment.lvalue, ID):
-            self.writeset.add(assignment.lvalue.name)
+            self.writeSet.add(assignment.lvalue.name)
 
     # What happens when we visit a declaration.
     # Similar to the previous example: we add the variable name
     def visit_Decl(self, decl):
         if decl.init is not None:
-            self.writeset.add(decl.name)
+            self.writeSet.add(decl.name)
 
     # Here we have a single visitor looking in the whole tree. But you
     # might sometimes need to handle merge cases (when you have to
@@ -407,7 +389,7 @@ class WriteSetVisitor(NodeVisitor):
         welse = WriteSetVisitor()
         wif.visit(ifnode.iftrue)
         welse.visit(ifnode.iffalse)
-        self.writeset.union(wif.writeset.union(welse.writeset.union()))
+        self.writeSet.union(wif.writeSet.union(welse.writeSet.union()))
 
         # In this case it is not really interesting, the visitor would have added
         # the variables anyway, but it could be in other cases.
@@ -417,26 +399,26 @@ class WriteSetVisitor(NodeVisitor):
 class FuncWriteSetPrinter(NodeVisitor):
     def __init__(self):
         # The dict associates function names to write sets:
-        self.writesets = {}
+        self.writeSets = {}
 
     def visit_FuncDef(self, funcdef):
         # Create a WriteSet visitor for the body of the function
         wsv = WriteSetVisitor()
         # Execute it on the function's body
         wsv.visit(funcdef.body)
-        # Now it contains the writeset of the function
-        self.writesets[funcdef.decl.name] = wsv.writeset
+        # Now it contains the writeSet of the function
+        self.writeSets[funcdef.decl.name] = wsv.writeSet
 
     def print_sets(self):
-        for fname, writeset in self.writesets.items():
+        for fname, writeSet in self.writeSets.items():
             # Print 'function string' writes in 'set representation'
-            print ("%s writes in %r" % (fname, writeset))
+            print ("%s writes in %r" % (fname, writeSet))
 
 
 class ReadSetVisitor(NodeVisitor):
     def __init__(self):
         # The 'memory' of the node: the set of variables we are writing in.
-        self.readset = set()
+        self.readSet = set()
 
     # What we do when we visit an assignment.
     def visit_Assignment(self, assignment):
@@ -444,15 +426,15 @@ class ReadSetVisitor(NodeVisitor):
         # we don't care about other types of rvalue in this
         if isinstance(assignment.rvalue, BinaryOp):
             if isinstance(assignment.rvalue.left, ID):
-                self.readset.add(assignment.rvalue.left.name)
+                self.readSet.add(assignment.rvalue.left.name)
             if isinstance(assignment.rvalue.right, ID):
-                self.readset.add(assignment.rvalue.right.name)
+                self.readSet.add(assignment.rvalue.right.name)
 
     # What happens when we visit a arrayref.
     # Similar to the previous example: we add the variable name
     def visit_ArrayRef(self, aref):
         if isinstance(aref.name, ID):
-            self.readset.add(aref.name.name)
+            self.readSet.add(aref.name.name)
 
     # Here we have a single visitor looking in the whole tree. But you
     # might sometimes need to handle merge cases (when you have to
@@ -463,7 +445,7 @@ class ReadSetVisitor(NodeVisitor):
         relse = ReadSetVisitor()
         rif.visit(ifnode.iftrue)
         relse.visit(ifnode.iffalse)
-        self.readset.union(rif.readset.union(relse.readset.union()))
+        self.readSet.union(rif.readSet.union(relse.readSet.union()))
 
         # In this case it is not really interesting, the visitor would have added
         # the variables anyway, but it could be in other cases.
@@ -473,17 +455,17 @@ class ReadSetVisitor(NodeVisitor):
 class FuncReadSetPrinter(NodeVisitor):
     def __init__(self):
         # The dict associates function names to write sets:
-        self.readsets = {}
+        self.readSets = {}
 
     def visit_FuncDef(self, funcdef):
         # Create a WriteSet visitor for the body of the function
         rsv = ReadSetVisitor()
         # Execute it on the function's body
         rsv.visit(funcdef.body)
-        # Now it contains the readset of the function
-        self.readsets[funcdef.decl.name] = rsv.readset
+        # Now it contains the readSet of the function
+        self.readSets[funcdef.decl.name] = rsv.readSet
 
     def print_sets(self):
-        for fname, readset in self.readsets.items():
+        for fname, readSet in self.readSets.items():
             # Print 'function string' writes in 'set representation'
-            print ("%s reads in %r" % (fname, readset))
+            print ("%s reads in %r" % (fname, readSet))
