@@ -66,14 +66,13 @@ class LoopVisitor():
         for loop_sid in nested_loops:
             record.append(loop_sid)
             loop_sids = parent_loop_sid + [loop_sid]
-            dependent_stmt_str = ""
-            for sid in loop_sids:
-                for (ind, stmt) in self.loopRWVisitor.indices[sid]:
-                    dependent_stmt_str += print_indent + print_indent
-                    dependent_stmt_str += "Index " + str(ind) + " is updated in statement " + stmt + " \n"
 
             print_output += print_indent + "----------In Nested Loop----------\n"
             print_output += print_indent + "Indexes used and corresponding update statements: \n"
+            dependent_stmt_str = ""
+            for (ind, stmt) in self.loopRWVisitor.indices[loop_sid]:
+                dependent_stmt_str += print_indent + print_indent
+                dependent_stmt_str += "Index " + str(ind) + " is updated in statement " + stmt + " \n"
             print_output += dependent_stmt_str + "\n"
 
             dependence_lst = self.loopRWVisitor.dependency_map.get(loop_sid)
