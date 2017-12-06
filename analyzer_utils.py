@@ -182,10 +182,7 @@ class BlockRWVisitor(NodeVisitor):
 
             dva = DependenceVectorAnalysis(stmt.nid)
             dva.visit(stmt)
-            self.parent.dependency_map.update(dva.d_mapping)
-            # if isinstance(stmt, Assignment):
-            #     d_mapping = generate_dependency_mapping(stmt)
-            #     self.parent.dependency_map.update(d_mapping)
+            self.parent.dependency_map.update(dva.d_mapping)\
 
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
@@ -221,37 +218,6 @@ class DependenceVectorAnalysis(NodeVisitor):
             self.right_indices_mapping.update(copy.deepcopy(sub_states))
 
         self.d_mapping[self.parentID] = [self.left_indices_mapping, self.right_indices_mapping]
-
-
-def generate_dependency_mapping(assignment):
-    if not isinstance(assignment, Assignment):
-        # Sanity check
-        assert False
-        return None
-
-    d_mapping = {}
-    left_indices_mapping = {}
-    right_indices_mapping = {}
-
-    # handle left-hand side which must be ArrayRef
-    if isinstance(assignment.lvalue, ArrayRef):
-        left_indices, d_values = process_ArrayRef(assignment.lvalue)
-        mapping = construct_dependency_mapping(assignment.lvalue.name, left_indices, d_values)
-        left_indices_mapping.update(copy.deepcopy(mapping))
-
-    # handle right-hand side
-    # example: a[i][j]
-    if isinstance(assignment.rvalue, ArrayRef):
-        key, val = process_ArrayRef(assignment.rvalue)
-        right_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(assignment.rvalue.name, key, val)))
-
-    # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
-    elif isinstance(assignment.rvalue, BinaryOp):
-        sub_states = process_BinaryOp(assignment.rvalue)
-        right_indices_mapping.update(copy.deepcopy(sub_states))
-
-    d_mapping[assignment.nid] = [left_indices_mapping, right_indices_mapping]
-    return d_mapping
 
 
 def process_BinaryOp(binaryOp):
