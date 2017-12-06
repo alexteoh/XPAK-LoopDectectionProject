@@ -23,37 +23,36 @@ class LoopVisitor():
         self.reachingDefinitions.visit(node)
         self.loopRWVisitor.visit(node)
         self.loops = [sid for sid in self.liveVariables.loops]
-        # self.loops = [sid for sid in self.loopRWVisitor.loops]
 
     # String representation of the information collected by this class
     def __str__(self):
         already_checked = []
-        res = "Here're the states of each loop in the given program. \n"
+        ret_str = "Here're the states of each loop in the given program. \n"
 
         for sid in self.loops:
             if sid not in already_checked:
-                res += "----------In this loop----------\n"
-                res += "Read Variables are these: \n"
-                res += "\t" + str(self.loopRWVisitor.readSets[sid]) + "\n"
-                res += "Write Variables are these: \n"
-                res += "\t" + str(self.loopRWVisitor.writeSets[sid]) + "\n"
-                res += "Live Variables are these: \n"
-                res += "\t" + self.liveVariables.str_of_rdef(sid)
-                res += "Reaching Definitions are these\n"
-                res += "\t" + self.reachingDefinitions.str_of_rdef(sid)
+                ret_str += "----------In this loop----------\n"
+                ret_str += "Read Variables are these: \n"
+                ret_str += "\t" + str(self.loopRWVisitor.readSets[sid]) + "\n"
+                ret_str += "Write Variables are these: \n"
+                ret_str += "\t" + str(self.loopRWVisitor.writeSets[sid]) + "\n"
+                ret_str += "Live Variables are these: \n"
+                ret_str += "\t" + self.liveVariables.str_of_rdef(sid)
+                ret_str += "Reaching Definitions are these\n"
+                ret_str += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
-                if sid in self.loopRWVisitor.indexes:
-                    res += "\nIndexes used and corresponding update statements:\n"
-                    for (ind, stmt) in self.loopRWVisitor.indexes[sid]:
-                        res += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
+                if sid in self.loopRWVisitor.indices:
+                    ret_str += "\nIndexes used and corresponding update statements:\n"
+                    for (ind, stmt) in self.loopRWVisitor.indices[sid]:
+                        ret_str += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
 
                 nested_loops = self.loopRWVisitor.loop_hierarchy.get(sid)
                 # If there's nested loops within this loop
                 if nested_loops:
-                    res += "\nNested Loops information: \n"
-                    res += self.nestedloop_printer(nested_loops, [sid], "", already_checked)
+                    ret_str += "\nNested Loops information: \n"
+                    ret_str += self.nestedloop_printer(nested_loops, [sid], "", already_checked)
 
-        return res
+        return ret_str
 
     # Print nested loops information (e.g. index vectors, dependence vectors)
     def nestedloop_printer(self, nested_loops, parent_loop_sid, print_indent, record):
@@ -63,41 +62,37 @@ class LoopVisitor():
         for loop_sid in nested_loops:
             record.append(loop_sid)
             loop_sids = parent_loop_sid + [loop_sid]
-            index_vectors_str = print_indent + "Index vector: ["
-            dependent_stmt_str = print_indent + "Dependence vectors: \n"
+            dependent_stmt_str = ""
             for sid in loop_sids:
-                for item in self.loopRWVisitor.indexes[sid]:
-                    (ind, stmt) = item
-                    index_vectors_str += ind + ", "
-                    dependent_stmt_str += print_indent + print_indent + "Statement: " + str(stmt) + "\n"
+                for (ind, stmt) in self.loopRWVisitor.indices[sid]:
+                    dependent_stmt_str += print_indent + print_indent
+                    dependent_stmt_str += "Index " + str(ind) + " is updated in statement " + stmt + " \n"
 
-            index_vectors_str = index_vectors_str.rstrip(',')
-            index_vectors_str += "]\n"
             print_output += print_indent + "------- Nested Loop ------\n"
-            print_output += index_vectors_str
+            print_output += print_indent + "Indexes used and corresponding update statements: \n"
             print_output += dependent_stmt_str + "\n"
 
-            dependence_vectors = self.loopRWVisitor.dependence_vector.get(loop_sid)
-            if dependence_vectors:
+            dependence_lst = self.loopRWVisitor.dependency_map.get(loop_sid)
+            if dependence_lst:
                 D_flow_vector_str = print_indent + "D_flow vectors: \n"
                 D_anti_vectors_str = print_indent + "D_anti vectors: \n"
                 D_flow_vectors = []
                 D_anti_vectors = []
 
-                states_value = dependence_vectors[0].values()[0]
-                vector_value_lst = dependence_vectors[1].values()
-                for dic in vector_value_lst:
-                    temp_lst = []
-                    temp_lst2 = []
+                left_indices = dependence_lst[0].values()[0]
+                right_indices_mapping = dependence_lst[1].values()
+                for right_indices in right_indices_mapping:
+                    D_flow_vector = []
+                    D_anti_vector = []
                     # TODO: need to fix, no state name
-                    for key in states_value.keys():
-                        if key not in dic:
+                    for left_index in left_indices.keys():
+                        if left_index not in right_indices:
                             continue
-                        temp_lst.append(int(states_value.get(key)) - int(dic.get(key)))
-                        temp_lst2.append(int(dic.get(key)) - int(states_value.get(key)))
+                        D_flow_vector.append(int(left_indices.get(left_index)) - int(right_indices.get(left_index)))
+                        D_anti_vector.append(int(right_indices.get(left_index)) - int(left_indices.get(left_index)))
 
-                    D_flow_vectors.append(temp_lst)
-                    D_anti_vectors.append(temp_lst2)
+                    D_flow_vectors.append(D_flow_vector)
+                    D_anti_vectors.append(D_anti_vector)
 
                 for s in D_flow_vectors:
                     D_flow_vector_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
@@ -117,13 +112,18 @@ class LoopVisitor():
 # NodeVisitor that tracks read/write variable sets in loops.
 class LoopRWVisitor(NodeVisitor):
     def __init__(self):
+        # Track read/write variables
         self.readSets = {}
         self.writeSets = {}
-        self.indexes = {}
-        self.loop_hierarchy = {}
+        # Track indices used in loops
+        self.indices = {}
+        # List of statement id of loops
         self.loops = list()
-
-        self.dependence_vector = {}
+        # Mapping of a loop and its nested loops
+        self.loop_hierarchy = {}
+        # Dependency maps to track dependence vectors
+        # Format: {loop_sid: [left_indices_mapping, right_indices_mapping]}
+        self.dependency_map = {}
 
     def visit_For(self, forstmt):
         forsid = forstmt.nid
@@ -134,12 +134,10 @@ class LoopRWVisitor(NodeVisitor):
         self.writeSets[forsid] = copy.deepcopy(bv.writeSet)
         self.readSets[forsid] = copy.deepcopy(bv.readSet)
 
-        self.indexes[forsid] = list()
+        self.indices[forsid] = list()
         if hasattr(forstmt.init, 'decls'):
             for decl in forstmt.init.decls:
-                self.indexes[forsid].append((decl.name, str(forstmt.next)))
-        else:
-            self.indexes[forsid].append((forstmt.init.lvalue.name, str(forstmt.next)))
+                self.indices[forsid].append((decl.name, str(forstmt.next)))
 
     def visit_While(self, whilestmt):
         whilesid = whilestmt.nid
@@ -178,16 +176,16 @@ class BlockRWVisitor(NodeVisitor):
 
                 self.parent.writeSets.update(copy.deepcopy(nest.writeSets))
                 self.parent.readSets.update(copy.deepcopy(nest.readSets))
-                self.parent.indexes.update(copy.deepcopy(nest.indexes))
+                self.parent.indices.update(copy.deepcopy(nest.indices))
                 self.parent.loop_hierarchy[self.parentSID].append(stmt.nid)
                 self.parent.loop_hierarchy.update(copy.deepcopy(nest.loop_hierarchy))
 
             dva = DependenceVectorAnalysis(stmt.nid)
             dva.visit(stmt)
-            self.parent.dependence_vector.update(dva.lst)
+            self.parent.dependency_map.update(dva.d_mapping)
             # if isinstance(stmt, Assignment):
             #     d_mapping = generate_dependency_mapping(stmt)
-            #     self.parent.dependence_vector.update(d_mapping)
+            #     self.parent.dependency_map.update(d_mapping)
 
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
