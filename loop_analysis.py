@@ -31,21 +31,25 @@ class LoopVisitor():
 
         for sid in self.loops:
             if sid not in already_checked:
-                ret_str += "----------In this loop----------\n"
-                ret_str += "Read Variables are these: \n"
+                ret_str += "----------In this Loop----------\n"
+                ret_str += "Read Variables are: \n"
                 ret_str += "\t" + str(self.loopRWVisitor.readSets[sid]) + "\n"
-                ret_str += "Write Variables are these: \n"
+                ret_str += "Write Variables are: \n"
                 ret_str += "\t" + str(self.loopRWVisitor.writeSets[sid]) + "\n"
-                ret_str += "Live Variables are these: \n"
-                ret_str += "\t" + self.liveVariables.str_of_rdef(sid)
-                ret_str += "Reaching Definitions are these\n"
+                ret_str += "Live Variables are: \n"
+                liveVar_str = self.liveVariables.str_of_rdef(sid)
+                liveVar_str = liveVar_str[: liveVar_str.find('\n')+1] + "\t" + liveVar_str[liveVar_str.find('\n')+1:]
+                ret_str += "\t" + liveVar_str
+                ret_str += "Reaching Definitions are: \n"
                 ret_str += "\t" + self.reachingDefinitions.str_of_rdef(sid)
 
+                # Print info on indices
                 if sid in self.loopRWVisitor.indices:
                     ret_str += "\nIndexes used and corresponding update statements:\n"
                     for (ind, stmt) in self.loopRWVisitor.indices[sid]:
                         ret_str += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
 
+                # Print info on nested loops (e.g. Dependence Vector)
                 nested_loops = self.loopRWVisitor.loop_hierarchy.get(sid)
                 # If there's nested loops within this loop
                 if nested_loops:
@@ -68,7 +72,7 @@ class LoopVisitor():
                     dependent_stmt_str += print_indent + print_indent
                     dependent_stmt_str += "Index " + str(ind) + " is updated in statement " + stmt + " \n"
 
-            print_output += print_indent + "------- Nested Loop ------\n"
+            print_output += print_indent + "----------In Nested Loop----------\n"
             print_output += print_indent + "Indexes used and corresponding update statements: \n"
             print_output += dependent_stmt_str + "\n"
 
@@ -250,7 +254,6 @@ def process_ArrayRef(ref):
             if subscript.op == "+":
                 if isinstance(subscript.left, ID):
                     indices.append(subscript.left.name)
-
                     d_values.append(subscript.right.value)
                 else:
                     indices.append(subscript.right.name)
