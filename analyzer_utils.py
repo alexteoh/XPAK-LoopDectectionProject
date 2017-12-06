@@ -22,7 +22,7 @@ class LoopVisitor():
         self.liveVariables.visit(node)
         self.reachingDefinitions.visit(node)
         self.loopRWVisitor.visit(node)
-        self.loops = [sid for sid in self.liveVariables.loops]
+        self.loops = [sid for sid in self.loopRWVisitor.loops]
 
     # String representation of the information collected by this class
     def __str__(self):
@@ -99,8 +99,8 @@ class LoopVisitor():
                 for s in D_anti_vectors:
                     D_anti_vectors_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
 
-                print_output += D_flow_vector_str + "\n"
-                print_output += D_anti_vectors_str + "\n"
+                print_output += D_flow_vector_str
+                print_output += D_anti_vectors_str
 
             doubly_nested_loops = self.loopRWVisitor.loop_hierarchy.get(loop_sid)
             if doubly_nested_loops:
@@ -139,22 +139,6 @@ class LoopRWVisitor(NodeVisitor):
             for decl in forstmt.init.decls:
                 self.indices[forsid].append((decl.name, str(forstmt.next)))
 
-    def visit_While(self, whilestmt):
-        whilesid = whilestmt.nid
-        self.loops.append(whilesid)
-        bv = BlockRWVisitor(self, whilesid)
-        bv.visit(whilestmt.stmt)
-        self.writeSets[whilesid] = copy.deepcopy(bv.writeSet)
-        self.readSets[whilesid] = copy.deepcopy(bv.readSet)
-
-    def visit_DoWhile(self, dowhilestmt):
-        dowhilesid = dowhilestmt.nid
-        self.loops.append(dowhilesid)
-        bv = BlockRWVisitor(self, dowhilesid)
-        bv.visit(dowhilestmt.stmt)
-        self.writeSets[dowhilesid] = copy.deepcopy(bv.writeSet)
-        self.readSets[dowhilesid] = copy.deepcopy(bv.readSet)
-
 
 # NodeVisitor that collects information in a block statement
 class BlockRWVisitor(NodeVisitor):
@@ -170,7 +154,7 @@ class BlockRWVisitor(NodeVisitor):
 
         for stmt in block.block_items:
             # check nested loop
-            if isinstance(stmt, For) or isinstance(stmt, DoWhile) or isinstance(stmt, While):
+            if isinstance(stmt, For):
                 nest = LoopRWVisitor()
                 nest.visit(stmt)
 

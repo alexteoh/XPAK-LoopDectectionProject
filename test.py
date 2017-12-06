@@ -7,7 +7,7 @@ import os
 def main():
     test_dir = "./prog_inputs"
     for filename in os.listdir(test_dir):
-        if filename.endswith(".c") and filename != "loop_analysis.c":
+        if filename.endswith(".c"):
             print('\n=======================')
             print('Analyzing ' + filename + ' program')
             test_file = os.path.join(test_dir, filename)
