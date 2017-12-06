@@ -5,7 +5,7 @@ import os
 
 
 def main():
-    test_dir = "./prog_inputs"
+    test_dir = "./official_inputs"
     for filename in os.listdir(test_dir):
         if filename.endswith(".c"):
             print('\n=======================')
