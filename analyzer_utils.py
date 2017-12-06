@@ -51,7 +51,7 @@ class LoopVisitor():
                 # If there's nested loops within this loop
                 if nested_loops:
                     res += "\nNested Loops information: \n"
-                    res += self.nestedloop_printer(nested_loops, sid, "", already_checked)
+                    res += self.nestedloop_printer(nested_loops, [sid], "", already_checked)
                     # res += self.nestedloop_printer("", nested_loops, [sid], "", already_checked)
 
         return res
@@ -63,11 +63,12 @@ class LoopVisitor():
 
         for loop_sid in nested_loops:
             record.append(loop_sid)
-            loop_sids = [parent_loop_sid] + [loop_sid]
+            loop_sids = parent_loop_sid + [loop_sid]
             index_vectors_str = print_indent + "Index vector: ["
             dependent_stmt_str = print_indent + "Dependence vectors: \n"
             for sid in loop_sids:
-                for ind, stmt in self.loopRWVisitor.indexes[sid]:
+                for item in self.loopRWVisitor.indexes[sid]:
+                    (ind, stmt) = item
                     index_vectors_str += ind + ", "
                     dependent_stmt_str += print_indent + print_indent + "Statement: " + str(stmt) + "\n"
 
@@ -79,10 +80,12 @@ class LoopVisitor():
 
             dependence_vectors = self.loopRWVisitor.dependence_vector.get(loop_sid)
             if dependence_vectors:
+
                 D_flow_vector_str = print_indent + "D_flow vectors: \n"
                 D_anti_vectors_str = print_indent + "D_anti vectors: \n"
                 D_flow_vectors = []
                 D_anti_vectors = []
+
 
                 states_value = dependence_vectors[0].values()[0]
                 vector_value_lst = dependence_vectors[1].values()
@@ -211,6 +214,8 @@ class DependenceVectorAnalysis(NodeVisitor):
         if isinstance(assignment.lvalue, ArrayRef):
             key, val = process_ArrayRef(assignment.lvalue)
             self.states.update(copy.deepcopy(helper_construct(assignment.lvalue.name, key, val)))
+        else:
+            return
 
         # handle right-hand side
         # example: a[i][j]
