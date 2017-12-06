@@ -138,6 +138,8 @@ class LoopRWVisitor(NodeVisitor):
         if hasattr(forstmt.init, 'decls'):
             for decl in forstmt.init.decls:
                 self.indices[forsid].append((decl.name, str(forstmt.next)))
+        else:
+            self.indices[forsid].append((forstmt.init.lvalue.name, str(forstmt.next)))
 
 
 # NodeVisitor that collects information in a block statement

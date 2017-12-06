@@ -5,6 +5,7 @@ import os
 
 
 def main():
+    print("Executing loop analysis on official test inputs. ")
     test_dir = "./official_inputs"
     for filename in os.listdir(test_dir):
         if filename.endswith(".c"):
