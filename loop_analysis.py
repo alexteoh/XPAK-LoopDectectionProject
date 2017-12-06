@@ -100,7 +100,7 @@ class LoopVisitor():
                     D_anti_vectors_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
 
                 print_output += D_flow_vector_str
-                print_output += D_anti_vectors_str
+                print_output += D_anti_vectors_str + "\n"
 
             doubly_nested_loops = self.loopRWVisitor.loop_hierarchy.get(loop_sid)
             if doubly_nested_loops:
@@ -168,7 +168,7 @@ class BlockRWVisitor(NodeVisitor):
 
             dva = DependenceVectorAnalysis(stmt.nid)
             dva.visit(stmt)
-            self.parent.dependency_map.update(dva.d_mapping)\
+            self.parent.dependency_map.update(dva.d_mapping)
 
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
@@ -176,7 +176,7 @@ class BlockRWVisitor(NodeVisitor):
             self.readSet = self.readSet.union(rsv.readSet)
 
 
-# NodeVisitor that do dependence vector analysis
+# NodeVisitor that does dependence vector analysis
 class DependenceVectorAnalysis(NodeVisitor):
     def __init__(self, parentID):
         self.d_mapping = {}
@@ -187,37 +187,39 @@ class DependenceVectorAnalysis(NodeVisitor):
     def visit_Assignment(self, assignment):
         # handle left-hand side, which must be ArrayRef
         if isinstance(assignment.lvalue, ArrayRef):
-            key, val = process_ArrayRef(assignment.lvalue)
-            self.left_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(assignment.lvalue.name, key, val)))
+            indices, d_values = process_ArrayRef(assignment.lvalue)
+            mapping = copy.deepcopy(construct_dependency_mapping(assignment.lvalue.name, indices, d_values))
+            self.left_indices_mapping.update(mapping)
         else:
             return
 
         # handle right-hand side
         # example: a[i][j]
         if isinstance(assignment.rvalue, ArrayRef):
-            key, val = process_ArrayRef(assignment.rvalue)
-            self.right_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(assignment.rvalue.name, key, val)))
+            indices, d_values = process_ArrayRef(assignment.rvalue)
+            mapping = copy.deepcopy(construct_dependency_mapping(assignment.rvalue.name, indices, d_values))
+            self.right_indices_mapping.update(mapping)
 
         # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
         elif isinstance(assignment.rvalue, BinaryOp):
-            sub_states = process_BinaryOp(assignment.rvalue)
-            self.right_indices_mapping.update(copy.deepcopy(sub_states))
+            self.right_indices_mapping.update(copy.deepcopy(process_BinaryOp(assignment.rvalue)))
 
         self.d_mapping[self.parentID] = [self.left_indices_mapping, self.right_indices_mapping]
 
 
+# Process binaryOp statement and returns indices mapping
 def process_BinaryOp(binaryOp):
     if not isinstance(binaryOp, BinaryOp):
         # Sanity check
         assert False
         return None
 
-    left_indices = dict()
+    right_indices_mapping = dict()
 
     def process_subscript(subscript):
         if isinstance(subscript, ArrayRef):
             right_indices, d_values = process_ArrayRef(subscript)
-            left_indices.update(copy.deepcopy(construct_dependency_mapping(subscript, right_indices, d_values)))
+            right_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(subscript, right_indices, d_values)))
 
     # Base case
     if isinstance(binaryOp.left, ArrayRef):
@@ -226,9 +228,9 @@ def process_BinaryOp(binaryOp):
     else:
         process_subscript(binaryOp.right)
         if isinstance(binaryOp.left, BinaryOp):
-            left_indices.update(process_BinaryOp(binaryOp.left))
+            right_indices_mapping.update(process_BinaryOp(binaryOp.left))
 
-    return left_indices
+    return right_indices_mapping
 
 
 def process_ArrayRef(ref):
@@ -237,29 +239,29 @@ def process_ArrayRef(ref):
         assert False
         return None, None
 
-    right_indices = []
+    indices = []
     d_values = []
 
     def process_subscript(subscript):
         if isinstance(subscript, ID):
-            right_indices.append(subscript.name)
+            indices.append(subscript.name)
             d_values.append("0")
         elif isinstance(subscript, BinaryOp):
             if subscript.op == "+":
                 if isinstance(subscript.left, ID):
-                    right_indices.append(subscript.left.name)
+                    indices.append(subscript.left.name)
 
                     d_values.append(subscript.right.value)
                 else:
-                    right_indices.append(subscript.right.name)
+                    indices.append(subscript.right.name)
                     d_values.append(subscript.left.value)
 
             elif subscript.op == "-":
                 if isinstance(subscript.left, ID):
-                    right_indices.append(subscript.left.name)
+                    indices.append(subscript.left.name)
                     d_values.append("-" + subscript.right.value)
                 else:
-                    right_indices.append(subscript.right.name)
+                    indices.append(subscript.right.name)
                     d_values.append("-" + subscript.left.value)
 
     # Base case
@@ -270,11 +272,11 @@ def process_ArrayRef(ref):
     else:
         process_subscript(ref.subscript)
         if isinstance(ref.name, ArrayRef):
-            more_index, more_d_value = process_ArrayRef(ref.name)
-            right_indices.extend(more_index)
-            d_values.extend(more_d_value)
+            more_indice, more_d_values = process_ArrayRef(ref.name)
+            indices.extend(more_indice)
+            d_values.extend(more_d_values)
 
-    return right_indices, d_values
+    return indices, d_values
 
 
 def construct_dependency_mapping(stmt_name, indices, d_values):
