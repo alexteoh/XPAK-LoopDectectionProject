@@ -45,9 +45,9 @@ class LoopVisitor():
 
                 # Print info on indices
                 if sid in self.loopRWVisitor.indices:
-                    ret_str += "\nIndexes used and corresponding update statements:\n"
-                    for (ind, stmt) in self.loopRWVisitor.indices[sid]:
-                        ret_str += "\tIndex %s is updated in statement %s\n" % (ind, stmt)
+                    ret_str += "\nIndexes used and corresponding guard/update statements:\n"
+                    for (ind, guard_stmt, update_stmt) in self.loopRWVisitor.indices[sid]:
+                        ret_str += "\tIndex %s -- guard condition %s, update stmt %s\n" % (ind, guard_stmt, update_stmt)
 
                 # Print info on nested loops (e.g. Dependence Vector)
                 nested_loops = self.loopRWVisitor.loop_hierarchy.get(sid)
@@ -68,12 +68,11 @@ class LoopVisitor():
             loop_sids = parent_loop_sid + [loop_sid]
 
             print_output += print_indent + "----------In Nested Loop----------\n"
-            print_output += print_indent + "Indexes used and corresponding update statements: \n"
-            dependent_stmt_str = ""
-            for (ind, stmt) in self.loopRWVisitor.indices[loop_sid]:
-                dependent_stmt_str += print_indent + print_indent
-                dependent_stmt_str += "Index " + str(ind) + " is updated in statement " + stmt + " \n"
-            print_output += dependent_stmt_str + "\n"
+            print_output += print_indent + "Indexes used and corresponding guard/update statements: \n"
+            for (ind, guard_stmt, update_stmt) in self.loopRWVisitor.indices[loop_sid]:
+                print_output += print_indent + print_indent
+                print_output += "\tIndex %s -- guard condition %s, update stmt %s\n" % (ind, guard_stmt, update_stmt)
+            print_output += "\n"
 
             dependence_lst = self.loopRWVisitor.dependency_map.get(loop_sid)
             if dependence_lst:
@@ -140,9 +139,9 @@ class LoopRWVisitor(NodeVisitor):
         self.indices[forsid] = list()
         if hasattr(forstmt.init, 'decls'):
             for decl in forstmt.init.decls:
-                self.indices[forsid].append((decl.name, str(forstmt.next)))
+                self.indices[forsid].append((decl.name, str(forstmt.cond), str(forstmt.next)))
         else:
-            self.indices[forsid].append((forstmt.init.lvalue.name, str(forstmt.next)))
+            self.indices[forsid].append((forstmt.init.lvalue.name, str(forstmt.cond), str(forstmt.next)))
 
 
 # NodeVisitor that collects information in a block statement
