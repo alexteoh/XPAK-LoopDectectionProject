@@ -1,4 +1,4 @@
-from analyzer_utils import *
+from loop_analysis import *
 from pycparser import parse_file
 from pyminic.minic.c_ast_to_minic import transform
 import os
