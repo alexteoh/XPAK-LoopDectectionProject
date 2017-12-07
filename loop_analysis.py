@@ -51,6 +51,7 @@ class LoopVisitor():
 
                 # Print info on nested loops (e.g. Dependence Vector)
                 nested_loops = self.loopRWVisitor.loop_hierarchy.get(sid)
+                
                 # If there's nested loops within this loop
                 if nested_loops:
                     ret_str += "\nNested Loops information: \n"
@@ -74,32 +75,39 @@ class LoopVisitor():
                 print_output += "\tIndex %s -- guard condition %s, update stmt %s\n" % (ind, guard_stmt, update_stmt)
             print_output += "\n"
 
-            dependence_lst = self.loopRWVisitor.dependency_map.get(loop_sid)
-            if dependence_lst:
+            dependence_lsts = self.loopRWVisitor.dependency_map.get(loop_sid)
+            if dependence_lsts:
                 D_flow_vector_str = print_indent + "D_flow vectors: \n"
                 D_anti_vectors_str = print_indent + "D_anti vectors: \n"
                 D_flow_vectors = []
                 D_anti_vectors = []
+                
+                for i in range(len(dependence_lsts)):
+                    dependence_lst = dependence_lsts[i]
+                    
+                    left_indices = dependence_lst[0].values()[0]
+                    right_indices_mapping = dependence_lst[1].values()
+                    
+                    
+                    for right_indices in right_indices_mapping:
+                        D_flow_vector = []
+                        D_anti_vector = []
+                        # TODO: need to fix, no state name
+                        for left_index in left_indices.keys():
+                            if left_index not in right_indices:
+                                continue
+                            D_flow_vector.append(int(left_indices.get(left_index)) - int(right_indices.get(left_index)))
+                            D_anti_vector.append(int(right_indices.get(left_index)) - int(left_indices.get(left_index)))
 
-                left_indices = dependence_lst[0].values()[0]
-                right_indices_mapping = dependence_lst[1].values()
-                for right_indices in right_indices_mapping:
-                    D_flow_vector = []
-                    D_anti_vector = []
-                    # TODO: need to fix, no state name
-                    for left_index in left_indices.keys():
-                        if left_index not in right_indices:
-                            continue
-                        D_flow_vector.append(int(left_indices.get(left_index)) - int(right_indices.get(left_index)))
-                        D_anti_vector.append(int(right_indices.get(left_index)) - int(left_indices.get(left_index)))
-
-                    D_flow_vectors.append(D_flow_vector)
-                    D_anti_vectors.append(D_anti_vector)
-
-                for s in D_flow_vectors:
-                    D_flow_vector_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
-                for s in D_anti_vectors:
-                    D_anti_vectors_str += print_indent + print_indent + "Statement: " + str(s) + "\n"
+                        D_flow_vectors.append(D_flow_vector)
+                        D_anti_vectors.append(D_anti_vector)
+                        
+    
+                    
+                    D_flow_vector_str += print_indent + print_indent + "Statement: " + "S" + str(i+1) + " " + str(D_flow_vectors) + "\n"      
+                    D_anti_vectors_str += print_indent + print_indent + "Statement: " + "S" + str(i+1) + " " + str(D_anti_vectors) + "\n"
+                    D_flow_vectors = []
+                    D_anti_vectors = []          
 
                 print_output += D_flow_vector_str
                 print_output += D_anti_vectors_str + "\n"
@@ -126,6 +134,7 @@ class LoopRWVisitor(NodeVisitor):
         # Dependency maps to track dependence vectors
         # Format: {loop_sid: [left_indices_mapping, right_indices_mapping]}
         self.dependency_map = {}
+        
 
     def visit_For(self, forstmt):
         forsid = forstmt.nid
@@ -140,6 +149,7 @@ class LoopRWVisitor(NodeVisitor):
         if hasattr(forstmt.init, 'decls'):
             for decl in forstmt.init.decls:
                 self.indices[forsid].append((decl.name, str(forstmt.cond), str(forstmt.next)))
+                
         else:
             self.indices[forsid].append((forstmt.init.lvalue.name, str(forstmt.cond), str(forstmt.next)))
 
@@ -155,9 +165,9 @@ class BlockRWVisitor(NodeVisitor):
     def visit_Block(self, block):
         wsv = WriteSetVisitor()
         rsv = ReadSetVisitor()
-
         for stmt in block.block_items:
             # check nested loop
+            
             if isinstance(stmt, For):
                 nest = LoopRWVisitor()
                 nest.visit(stmt)
@@ -167,11 +177,20 @@ class BlockRWVisitor(NodeVisitor):
                 self.parent.indices.update(copy.deepcopy(nest.indices))
                 self.parent.loop_hierarchy[self.parentSID].append(stmt.nid)
                 self.parent.loop_hierarchy.update(copy.deepcopy(nest.loop_hierarchy))
-
-            dva = DependenceVectorAnalysis(stmt.nid)
-            dva.visit(stmt)
-            self.parent.dependency_map.update(dva.d_mapping)
-
+                self.parent.dependency_map.update(copy.deepcopy(nest.dependency_map))
+            
+            #go the deepest for loop
+            else:
+          
+                dva = DependenceVectorAnalysis(self.parentSID)
+                dva.visit(stmt)
+                if not self.parent.dependency_map.get(self.parentSID):
+                    self.parent.dependency_map[self.parentSID] = []
+                
+                if dva.d_mapping.get(self.parentSID):
+                    self.parent.dependency_map.get(self.parentSID).append(dva.d_mapping.get(self.parentSID))
+                
+                
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
             rsv.visit(stmt)
@@ -188,24 +207,31 @@ class DependenceVectorAnalysis(NodeVisitor):
 
     def visit_Assignment(self, assignment):
         # handle left-hand side, which must be ArrayRef
+        
         if isinstance(assignment.lvalue, ArrayRef):
             indices, d_values = process_ArrayRef(assignment.lvalue)
-            mapping = copy.deepcopy(construct_dependency_mapping(assignment.lvalue.name, indices, d_values))
+            mapping = copy.deepcopy(construct_dependency_mapping(assignment.lvalue.__str__(), indices, d_values))
             self.left_indices_mapping.update(mapping)
         else:
             return
 
         # handle right-hand side
         # example: a[i][j]
+        
         if isinstance(assignment.rvalue, ArrayRef):
             indices, d_values = process_ArrayRef(assignment.rvalue)
-            mapping = copy.deepcopy(construct_dependency_mapping(assignment.rvalue.name, indices, d_values))
+            mapping = copy.deepcopy(construct_dependency_mapping(assignment.rvalue.__str__(), indices, d_values))
             self.right_indices_mapping.update(mapping)
 
         # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
         elif isinstance(assignment.rvalue, BinaryOp):
             self.right_indices_mapping.update(copy.deepcopy(process_BinaryOp(assignment.rvalue)))
-
+        
+        #print "\n\n", self.parentID
+        #print "assignment", assignment
+        #print "self.left_indices_mapping", self.left_indices_mapping
+        #print "self.right_indices_mapping", self.right_indices_mapping
+        #print "\n\n"
         self.d_mapping[self.parentID] = [self.left_indices_mapping, self.right_indices_mapping]
 
 
@@ -220,15 +246,20 @@ def process_BinaryOp(binaryOp):
 
     def process_subscript(subscript):
         if isinstance(subscript, ArrayRef):
-            right_indices, d_values = process_ArrayRef(subscript)
-            right_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(subscript, right_indices, d_values)))
+            right_indices, d_values = process_ArrayRef(subscript)        
+            right_indices_mapping.update(copy.deepcopy(construct_dependency_mapping(subscript.__str__(), right_indices, d_values)))
 
     # Base case
     if isinstance(binaryOp.left, ArrayRef):
-        process_subscript(binaryOp.left)
         process_subscript(binaryOp.right)
+        process_subscript(binaryOp.left)   
     else:
-        process_subscript(binaryOp.right)
+        if isinstance(binaryOp.right, ArrayRef):
+            process_subscript(binaryOp.right)
+
+        if isinstance(binaryOp.right, BinaryOp):
+            right_indices_mapping.update(process_BinaryOp(binaryOp.right))
+            
         if isinstance(binaryOp.left, BinaryOp):
             right_indices_mapping.update(process_BinaryOp(binaryOp.left))
 
@@ -250,6 +281,7 @@ def process_ArrayRef(ref):
             d_values.append("0")
         elif isinstance(subscript, BinaryOp):
             if subscript.op == "+":
+                
                 if isinstance(subscript.left, ID):
                     indices.append(subscript.left.name)
                     d_values.append(subscript.right.value)
@@ -258,6 +290,7 @@ def process_ArrayRef(ref):
                     d_values.append(subscript.left.value)
 
             elif subscript.op == "-":
+    
                 if isinstance(subscript.left, ID):
                     indices.append(subscript.left.name)
                     d_values.append("-" + subscript.right.value)
