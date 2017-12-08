@@ -98,8 +98,9 @@ class LoopVisitor():
                                 continue
                             D_flow_vector.append(int(left_indices.get(left_index)) - int(right_indices.get(left_index)))
                             D_anti_vector.append(int(right_indices.get(left_index)) - int(left_indices.get(left_index)))
-
-                        D_flow_vectors.append(D_flow_vector)
+                        
+                        if self.lexi_positive_test(D_flow_vector, 0):
+                            D_flow_vectors.append(D_flow_vector)
                         D_anti_vectors.append(D_anti_vector)
                         
     
@@ -119,6 +120,23 @@ class LoopVisitor():
         return print_output
 
 
+    #a helper function that make every flow dependence vector lexicographically positive
+    def lexi_positive_test(self, lst, i):
+        while i <= len(lst)-1:
+            if lst[i] == 0:
+                pass
+        
+            elif lst[i] > 0:
+                return True
+        
+            else:
+                break
+        
+            i = i + 1
+        
+        return False
+
+                    
 # NodeVisitor that tracks read/write variable sets in loops.
 class LoopRWVisitor(NodeVisitor):
     def __init__(self):
