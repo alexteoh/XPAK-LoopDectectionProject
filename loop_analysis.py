@@ -27,11 +27,11 @@ class LoopVisitor():
     # String representation of the information collected by this class
     def __str__(self):
         already_checked = []
-        ret_str = "Here're the states of each loop in the given program. \n"
+        ret_str = "Here is the information of each loop in the given program. \n"
 
         for sid in self.loops:
             if sid not in already_checked:
-                ret_str += "----------In this Loop----------\n"
+                ret_str += "----------In Loop----------\n"
                 ret_str += "Read Variables are: \n"
                 ret_str += "\t" + str(self.loopRWVisitor.readSets[sid]) + "\n"
                 ret_str += "Write Variables are: \n"
@@ -72,7 +72,7 @@ class LoopVisitor():
             print_output += print_indent + "Indexes used and corresponding guard/update statements: \n"
             for (ind, guard_stmt, update_stmt) in self.loopRWVisitor.indices[loop_sid]:
                 print_output += print_indent + print_indent
-                print_output += "\tIndex %s -- guard condition %s, update stmt %s\n" % (ind, guard_stmt, update_stmt)
+                print_output += "Index %s -- guard condition %s, update stmt %s\n" % (ind, guard_stmt, update_stmt)
             print_output += "\n"
 
             dependence_lsts = self.loopRWVisitor.dependency_map.get(loop_sid)
@@ -88,7 +88,6 @@ class LoopVisitor():
                     left_indices = dependence_lst[0].values()[0]
                     right_indices_mapping = dependence_lst[1].values()
                     
-                    
                     for right_indices in right_indices_mapping:
                         D_flow_vector = []
                         D_anti_vector = []
@@ -102,11 +101,9 @@ class LoopVisitor():
                         if self.lexi_positive_test(D_flow_vector, 0):
                             D_flow_vectors.append(D_flow_vector)
                         D_anti_vectors.append(D_anti_vector)
-                        
-    
                     
-                    D_flow_vector_str += print_indent + print_indent + "Statement: " + "S" + str(i+1) + " " + str(D_flow_vectors) + "\n"      
-                    D_anti_vectors_str += print_indent + print_indent + "Statement: " + "S" + str(i+1) + " " + str(D_anti_vectors) + "\n"
+                    D_flow_vector_str += print_indent + print_indent + "Statement " + str(i+1) + ": " + str(D_flow_vectors) + "\n"
+                    D_anti_vectors_str += print_indent + print_indent + "Statement " + str(i+1) + ": " + str(D_anti_vectors) + "\n"
                     D_flow_vectors = []
                     D_anti_vectors = []          
 
@@ -119,21 +116,17 @@ class LoopVisitor():
 
         return print_output
 
-
-    #a helper function that make every flow dependence vector lexicographically positive
+    # Test and ensure every flow dependence vector lexicographically positive
     def lexi_positive_test(self, lst, i):
         while i <= len(lst)-1:
             if lst[i] == 0:
                 pass
-        
             elif lst[i] > 0:
                 return True
-        
             else:
                 break
         
             i = i + 1
-        
         return False
 
                     
@@ -152,7 +145,6 @@ class LoopRWVisitor(NodeVisitor):
         # Dependency maps to track dependence vectors
         # Format: {loop_sid: [left_indices_mapping, right_indices_mapping]}
         self.dependency_map = {}
-        
 
     def visit_For(self, forstmt):
         forsid = forstmt.nid
@@ -167,7 +159,6 @@ class LoopRWVisitor(NodeVisitor):
         if hasattr(forstmt.init, 'decls'):
             for decl in forstmt.init.decls:
                 self.indices[forsid].append((decl.name, str(forstmt.cond), str(forstmt.next)))
-                
         else:
             self.indices[forsid].append((forstmt.init.lvalue.name, str(forstmt.cond), str(forstmt.next)))
 
@@ -184,8 +175,7 @@ class BlockRWVisitor(NodeVisitor):
         wsv = WriteSetVisitor()
         rsv = ReadSetVisitor()
         for stmt in block.block_items:
-            # check nested loop
-            
+            # check for nested loop
             if isinstance(stmt, For):
                 nest = LoopRWVisitor()
                 nest.visit(stmt)
@@ -197,9 +187,8 @@ class BlockRWVisitor(NodeVisitor):
                 self.parent.loop_hierarchy.update(copy.deepcopy(nest.loop_hierarchy))
                 self.parent.dependency_map.update(copy.deepcopy(nest.dependency_map))
             
-            #go the deepest for loop
+            # Go to the deepest for loop
             else:
-          
                 dva = DependenceVectorAnalysis(self.parentSID)
                 dva.visit(stmt)
                 if not self.parent.dependency_map.get(self.parentSID):
@@ -207,7 +196,6 @@ class BlockRWVisitor(NodeVisitor):
                 
                 if dva.d_mapping.get(self.parentSID):
                     self.parent.dependency_map.get(self.parentSID).append(dva.d_mapping.get(self.parentSID))
-                
                 
             wsv.visit(stmt)
             self.writeSet = self.writeSet.union(wsv.writeSet)
@@ -225,7 +213,6 @@ class DependenceVectorAnalysis(NodeVisitor):
 
     def visit_Assignment(self, assignment):
         # handle left-hand side, which must be ArrayRef
-        
         if isinstance(assignment.lvalue, ArrayRef):
             indices, d_values = process_ArrayRef(assignment.lvalue)
             mapping = copy.deepcopy(construct_dependency_mapping(assignment.lvalue.__str__(), indices, d_values))
@@ -235,21 +222,14 @@ class DependenceVectorAnalysis(NodeVisitor):
 
         # handle right-hand side
         # example: a[i][j]
-        
         if isinstance(assignment.rvalue, ArrayRef):
             indices, d_values = process_ArrayRef(assignment.rvalue)
             mapping = copy.deepcopy(construct_dependency_mapping(assignment.rvalue.__str__(), indices, d_values))
             self.right_indices_mapping.update(mapping)
-
         # examples:  #1.a[i][j] + 3    #2.(a[i][j] + 3)  (a[i+1][i+2)
         elif isinstance(assignment.rvalue, BinaryOp):
             self.right_indices_mapping.update(copy.deepcopy(process_BinaryOp(assignment.rvalue)))
-        
-        #print "\n\n", self.parentID
-        #print "assignment", assignment
-        #print "self.left_indices_mapping", self.left_indices_mapping
-        #print "self.right_indices_mapping", self.right_indices_mapping
-        #print "\n\n"
+
         self.d_mapping[self.parentID] = [self.left_indices_mapping, self.right_indices_mapping]
 
 
@@ -274,10 +254,8 @@ def process_BinaryOp(binaryOp):
     else:
         if isinstance(binaryOp.right, ArrayRef):
             process_subscript(binaryOp.right)
-
         if isinstance(binaryOp.right, BinaryOp):
             right_indices_mapping.update(process_BinaryOp(binaryOp.right))
-            
         if isinstance(binaryOp.left, BinaryOp):
             right_indices_mapping.update(process_BinaryOp(binaryOp.left))
 
@@ -299,7 +277,6 @@ def process_ArrayRef(ref):
             d_values.append("0")
         elif isinstance(subscript, BinaryOp):
             if subscript.op == "+":
-                
                 if isinstance(subscript.left, ID):
                     indices.append(subscript.left.name)
                     d_values.append(subscript.right.value)
@@ -308,7 +285,6 @@ def process_ArrayRef(ref):
                     d_values.append(subscript.left.value)
 
             elif subscript.op == "-":
-    
                 if isinstance(subscript.left, ID):
                     indices.append(subscript.left.name)
                     d_values.append("-" + subscript.right.value)
@@ -320,7 +296,6 @@ def process_ArrayRef(ref):
     if isinstance(ref.name, ID):
         # example: if ref is a[i], then ref.name is a and ref.subscript is i
         process_subscript(ref.subscript)
-
     else:
         process_subscript(ref.subscript)
         if isinstance(ref.name, ArrayRef):
